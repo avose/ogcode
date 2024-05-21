@@ -17,6 +17,7 @@ from .ogcIcons import ogcIcons
 from .ogcVersion import ogcVersion
 from .ogcStatusBar import ogcStatusBar
 
+from . import ogcGCode
 
 ################################################################################################
 class ogcFrame(wx.Frame):
