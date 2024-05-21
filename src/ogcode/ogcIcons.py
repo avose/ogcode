@@ -9,6 +9,7 @@ This file holds the code for the loading PNG icon images.
 
 import wx
 import os
+from pathlib import Path
 
 ################################################################################################
 
@@ -19,8 +20,9 @@ class ogcIconManager():
         if ogcIconManager.__icons is not None:
             return
         ogcIconManager.__icons = {}
-        img_dir = os.path.dirname(os.path.abspath(__file__))
-        img_dir = os.path.join(img_dir,"icons")
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        script_pp_dir = Path(script_dir).parent.parent.absolute()
+        img_dir = os.path.join(script_pp_dir,"icons")
         for fname in os.listdir(img_dir):
             img_name, ext = os.path.splitext(fname)
             if ext != ".png":

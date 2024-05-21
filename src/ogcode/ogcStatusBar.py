@@ -10,7 +10,7 @@ This file holds the code for the main application window's status bar.
 import wx
 import datetime
 
-from ogcLog import ogcLog
+from .ogcLog import ogcLog
 
 ################################################################################################
 class ogcLogList(wx.VListBox):

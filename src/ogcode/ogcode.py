@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 ################################################################################################
 '''
 Copyright 2024 Aaron Vose (avose@aaronvose.net)
@@ -12,12 +11,12 @@ import os
 import sys
 import wx
 
-from ogcVersion import ogcVersion
-from ogcApp import ogcApp
-from ogcIcons import ogcIcons
-from ogcHelp import ogcAboutFrame
-from ogcHelp import ogcLicenseFrame
-from ogcStatusBar import ogcStatusBar
+from .ogcApp import ogcApp
+from .ogcHelp import ogcAboutFrame, ogcLicenseFrame
+from .ogcIcons import ogcIcons
+from .ogcVersion import ogcVersion
+from .ogcStatusBar import ogcStatusBar
+
 
 ################################################################################################
 class ogcFrame(wx.Frame):
@@ -146,8 +145,7 @@ class ogcFrame(wx.Frame):
         return
 
 ################################################################################################
-
-if __name__ == '__main__':
+def run_ogcode():
     app = ogcApp.get()
     ogcode = ogcFrame(app)
     app.SetTopWindow(ogcode)

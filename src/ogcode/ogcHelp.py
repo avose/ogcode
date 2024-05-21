@@ -9,8 +9,8 @@ This file holds the code for windows created by the Help menu: About and License
 
 import wx
 
-from ogcVersion import ogcVersion
-from ogcIcons import ogcIcons
+from .ogcVersion import ogcVersion
+from .ogcIcons import ogcIcons
 
 ################################################################################################
 class ogcAboutFrame(wx.Frame):
