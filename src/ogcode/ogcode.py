@@ -106,6 +106,9 @@ class ogcFrame(wx.Frame):
                 if file_dialog.ShowModal() != wx.ID_OK:
                     return
                 # TODO: Open file: file_dialog.GetPath()
+                with open(file_dialog.GetPath(), "r") as gfile:
+                    tmp = ogcGCode.gcScript(text=gfile.read())
+                    print(str(tmp))
             return
         elif menu_id == self.ID_SETTINGS:
             if self.settings_frame is None:

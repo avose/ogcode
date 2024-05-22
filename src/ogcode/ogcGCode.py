@@ -58,6 +58,11 @@ class gcParam():
             raise ValueError(f"ERROR: Invalid G-Code parameter: '{name}={value}'")
         return
 
+    def __str__(self):
+        # Return string / text representation of this param.
+        value = int(self.value) if self.value == int(self.value) else self.value
+        return f"{self.name}{value}"
+
 ################################################################################################
 class gcCommand():
     
@@ -75,7 +80,7 @@ class gcCommand():
         # Parse text if needed.
         if text is not None:
             try:
-                params = [ gcParam(word) for word in text.split() ]
+                params = [ gcParam(text=word) for word in text.split() ]
             except:
                 raise ValueError(f"ERROR: Failed to create G-Code parameters from: '{text}'")
             if len(params) == 0:
@@ -85,6 +90,10 @@ class gcCommand():
         self.code = params[0]
         self.args = params[1:]
         return
+
+    def __str__(self):
+        # Return string / text representation of this command.
+        return " ".join([str(param) for param in self.params])
 
 ################################################################################################
 class gcScript():
@@ -105,7 +114,7 @@ class gcScript():
             commands = []
             for ndx, line in enumerate(text.splitlines()):
                 try:
-                    commands.append(gcCommand(line))
+                    commands.append(gcCommand(text=line))
                 except:
                     raise ValueError(f"ERROR: Failed to create G-Code command from line {ndx}: '{line}'")
             if len(commands) == 0:
@@ -113,5 +122,9 @@ class gcScript():
         # Set G-Code script's commands.
         self.commands = commands
         return
+
+    def __str__(self):
+        # Return string / text representation of this G-Code script.
+        return "\n".join([str(command) for command in self.commands])
 
 ################################################################################################
