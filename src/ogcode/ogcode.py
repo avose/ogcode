@@ -16,6 +16,7 @@ from .ogcHelp import ogcAboutFrame, ogcLicenseFrame
 from .ogcIcons import ogcIcons
 from .ogcVersion import ogcVersion
 from .ogcStatusBar import ogcStatusBar
+from .ogcEditorsPanel import ogcEditorsPanel
 
 from . import ogcGCode
 
@@ -83,13 +84,10 @@ class ogcFrame(wx.Frame):
         self.InitStatusBar()
         # Main box.
         box_main = wx.BoxSizer(wx.VERTICAL)
-        # TODO: Add tools and main view.
-        main_panel = wx.Panel()
-        p_main = wx.Panel(self, style=wx.RAISED_BORDER)
-        p_main.SetBackgroundColour((64,64,64))
-        st_todo = wx.StaticText(p_main, -1, "TODO", size=(640, 480))
+        # Add the main editors panel.
+        self.editor = ogcEditorsPanel(self)
         # Finalize UI layout.
-        box_main.Add(p_main, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
+        box_main.Add(self.editor, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)        
         self.SetSizerAndFit(box_main)
         self.Show(True)
         return
