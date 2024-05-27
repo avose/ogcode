@@ -11,7 +11,7 @@ import wx
 
 from .ogcIcons import ogcIcons
 from .ogcEvents import ogcEvents
-from .ogcEditor import ogcEditor
+from .ogcEditor import ogcEditorPanel
 from .ogcPlaceHolder import ogcPlaceHolder
 
 ################################################################################################
@@ -39,7 +39,7 @@ class ogcEditorsNotebook(wx.Window):
 
     def NewTab(self):
         self.RemovePlaceHolder()
-        editor = ogcEditor(self.notebook)
+        editor = ogcEditorPanel(self.notebook)
         self.tabs.append(editor)
         self.notebook.AddPage(editor, " Geometry " + str(len(self.tabs)))
         self.notebook.ChangeSelection(len(self.tabs)-1)
