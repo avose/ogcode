@@ -27,15 +27,14 @@ class ogcEditorsPanel(wx.Window):
     def __init__(self, parent):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(ogcEditorsPanel, self).__init__(parent,style=style)
-        self.Bind(ogcEvents.EVT_TAB_CURRENT, self.OnCurrentNotebook)
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
-        tools = [ (self.ID_EXIT, "Close Tab", 'cross', self.OnToolCloseTab),
-                  (self.ID_NEW, "New Terminal", 'monitor_add', self.OnToolTermNew),
+        tools = [ (self.ID_EXIT, "Close Tab", 'cross', self.OnToolTabClose),
+                  (self.ID_NEW, "New Tab", 'page_add', self.OnToolTabNew),
                   (self.ID_COPY, "Copy", 'page_copy', self.OnToolCopy),
                   (self.ID_PASTE, "Paste", 'page_paste', self.OnToolPaste),
-                  (self.ID_ZOOM_OUT, "Zoom Out", 'font_delete', self.OnToolZoomOut),
-                  (self.ID_ZOOM_IN, "Zoom In", 'font_add', self.OnToolZoomIn) ]
+                  (self.ID_ZOOM_OUT, "Zoom Out", 'zoom_out', self.OnToolZoomOut),
+                  (self.ID_ZOOM_IN, "Zoom In", 'zoom_in', self.OnToolZoomIn) ]
         for tool in tools:
             tid, text, icon, callback = tool
             self.toolbar.AddTool(tid, text, ogcIcons.Get(icon), wx.NullBitmap,
@@ -49,104 +48,28 @@ class ogcEditorsPanel(wx.Window):
         self.Show(True)
         return
 
-    def OnToolTermNew(self, event):
-        self.TerminalStart()
+    def OnToolTabNew(self, event):
+        print("TODO: Toolbar: New Tab.")
+        return
+
+    def OnToolTabClose(self, event):
+        print("TODO: Toolbar: Close current tab.")
         return
 
     def OnToolPaste(self, event):
-        term = self.GetCurrentTerm()
-        if term is not None:
-            term.Paste()
+        print("TODO: Toolbar: Paste.")
         return
 
     def OnToolCopy(self, event):
-        term = self.GetCurrentTerm()
-        if term is not None:
-            term.Copy()
+        print("TODO: Toolbar: Copy.")
         return
 
     def OnToolZoomIn(self, event):
-        term = self.GetCurrentTerm()
-        if term is not None:
-            term.ZoomIn()
+        print("TODO: Toolbar: Zoom in.")
         return
 
     def OnToolZoomOut(self, event):
-        term = self.GetCurrentTerm()
-        if term is not None:
-            term.ZoomOut()
-        return
-
-    def OnToolCloseTab(self, event):
-        self.TerminalClose()
-        return
-
-    def OnCurrentNotebook(self, event):
-        notebook = event.notebook
-        for nb in self.notebooks:
-            if nb != notebook:
-                nb.SetCurrent(False)
-        return
-
-    def GetCurrentNotebook(self):
-        for nb in self.notebooks:
-            if nb.IsCurrent():
-                return nb
-        if len(self.notebooks):
-            self.notebooks[0].SetCurrent(True)
-            return self.notebooks[0]
-        return None
-
-    def GetCurrentTerm(self):
-        notebook = self.GetCurrentNotebook()
-        if notebook is not None:
-            return notebook.GetCurrentTerm()
-        return None
-
-    def EditorLineSet(self, line):
-        term = self.GetCurrentTerm()
-        if term is None:
-            return
-        command = ogcSettings.Get('edit_line')
-        command = command.replace("{LINE}",str(line))
-        ogcLog.add("EditorLineSet(): "+str(line))
-        term.SendText(command)
-        return
-
-    def EditorFileOpen(self, path):
-        term = self.GetCurrentTerm()
-        if term is None:
-            return
-        command = ogcSettings.Get('edit_open')
-        command = command.replace("{FILE}",str(path))
-        ogcLog.add("EditorFileOpen(): "+str(path))
-        term.SendText(command)
-        return
-
-    def EditorStart(self, path):
-        notebook = self.GetCurrentNotebook()
-        if notebook is None:
-            return
-        term = notebook.OnNewTerm()
-        command = ogcSettings.Get('edit_path') + " '%s'\x0a"%(path)
-        ogcLog.add("EditorStart(): "+command)
-        term.SendText(command)
-        return
-
-    def TerminalStart(self):
-        notebook = self.GetCurrentNotebook()
-        if notebook is None:
-            return
-        notebook.OnNewTerm()
-        return
-
-    def TerminalClose(self):
-        notebook = self.GetCurrentNotebook()
-        if notebook is None:
-            return
-        term = notebook.GetCurrentTerm()
-        if term is not None:
-            notebook.CloseTerminal(term)
+        print("TODO: Toolbar: Zoom out.")
         return
 
 ################################################################################################
