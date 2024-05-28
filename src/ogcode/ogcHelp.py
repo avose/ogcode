@@ -24,14 +24,26 @@ class ogcAboutFrame(wx.Frame):
         box_main = wx.BoxSizer(wx.VERTICAL)
         box_top = wx.BoxSizer(wx.VERTICAL)
         # Panel to hold text at the top of the about frame.
-        self.panel_top = wx.Panel(self )
+        self.panel_top = wx.Panel(self)
         box_text = wx.BoxSizer(wx.VERTICAL)
-        self.st_title = wx.StaticText(self.panel_top, wx.ID_ANY, "About OG-Code (v%s):"%ogcVersion)
+        self.st_title = wx.StaticText(self.panel_top, wx.ID_ANY,
+                                      "About OG-Code (v%s):"%ogcVersion)
         self.st_title.SetFont(wx.Font(wx.FontInfo(11).FaceName("Monospace").Bold()))
         box_text.Add(self.st_title, 0, wx.ALL, 20)
-        self.description = 'TODO: About OG-Code\n'
+        self.description = (
+            'OG-Code (Open G-Code) is a utility for working with G-code (Geometry Code) and ' +
+            'has a focus on interoperability with the OpenGalvo (OPAL) project for laser ' +
+            'engraving.\n' +
+            'https://github.com/opengalvo/OPAL\n' +
+            '\nCombined, OpenGalvo and OG-Code provide a complete, end-to-end, open-source ' +
+            'software solution for controlling laser engravers and cutters using ' +
+            'galvanometer scan heads that support the XY2-100 protocol.\n' +
+            '\nThanks to Les Wright of YouTube channel "Les\' Lab" for inspiration and advice. ' +
+            'Les also provides an open source PCB design customized to work with OpenGalvo.' +
+            '\nhttps://github.com/leswright1977/OPAL_PCB'
+        )
         self.st_description = wx.StaticText(self.panel_top, wx.ID_ANY, self.description,
-                                            size=(585,340))
+                                            size=(580,280))
         self.st_description.SetFont(wx.Font(wx.FontInfo(11).FaceName("Monospace")))
         box_text.Add(self.st_description, 0, wx.LEFT | wx.RIGHT, 20)
         self.panel_top.SetSizerAndFit(box_text)
