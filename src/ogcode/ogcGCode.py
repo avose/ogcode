@@ -7,6 +7,7 @@ This file holds code for representing and manipulating G-Code.
 '''
 ################################################################################################
 
+import sys
 from typing import Optional, List
 
 # Example G-Code lines.
@@ -97,6 +98,8 @@ class gcCommand():
 
 ################################################################################################
 class gcScript():
+    _coord_min = -sys.float_info.max
+    _coord_max = sys.float_info.max
     
     def __init__(self, commands: Optional[List[gcCommand]] = None, text: Optional[str] = None):
         # Validate arguments.
@@ -126,5 +129,29 @@ class gcScript():
     def __str__(self):
         # Return string / text representation of this G-Code script.
         return "\n".join([str(command) for command in self.commands])
+
+    def bounds(self):
+        x_valid, y_valid = False, False
+        x_min, x_max = self._coord_max, self._coord_min
+        y_min, y_max = x_min, x_max
+        for command in self.commands:
+            if command.code.name == 'G' and command.code.value in [0, 1]:
+                x, y = None, None
+                for arg in command.args:
+                    if arg.name == 'X':
+                        x = arg.value
+                    elif arg.name == 'Y':
+                        y = arg.value
+                if x is not None:
+                    x_valid = True
+                    x_min, x_max = min(x_min, x), max(x_max, x)
+                if y is not None:
+                    y_valid = True
+                    y_min, y_max = min(y_min, y), max(y_max, y)
+        if not x_valid:
+            x_min = x_max = 0
+        if not y_valid:
+            y_min = y_max = 0
+        return (x_min, y_min), (x_max, y_max)
 
 ################################################################################################

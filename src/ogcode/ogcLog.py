@@ -16,7 +16,7 @@ class ogcLogManager():
     def __init__(self):
         if ogcLogManager.__log is None:
             now = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
-            ogcLogManager.__log = [ (now, "Begin OC-Code Log") ]
+            ogcLogManager.__log = [ (now, "Begin OG-Code Log") ]
         return
 
     def add(self, text):

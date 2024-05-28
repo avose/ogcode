@@ -99,14 +99,25 @@ class ogcFrame(wx.Frame):
             self.Destroy()
             return
         if menu_id == self.ID_OPEN_FILE:
+            # Show file selection dialog.
             style = wx.FD_OPEN | wx.FD_FILE_MUST_EXIST
             with wx.FileDialog(self, style=style) as file_dialog:
+                # Do nothing if no file selected by user.
                 if file_dialog.ShowModal() != wx.ID_OK:
                     return
-                # TODO: Open file: file_dialog.GetPath()
-                with open(file_dialog.GetPath(), "r") as gfile:
-                    tmp = ogcGCode.gcScript(text=gfile.read())
-                    print(str(tmp))
+                # Open G-code file and add to new editor tab.
+                gcode_path = file_dialog.GetPath()
+                try:
+                    with open(gcode_path, "r") as gfile:
+                        gcode = ogcGCode.gcScript(text=gfile.read())
+                except Exception as excptn:
+                    with wx.MessageDialog(self, "Failed to open G-code file:\n" +
+                                          f"\"{gcode_path}\"\n" +
+                                          f"\nError:\n{excptn}", caption="G-Code Error",
+                                          style=wx.OK|wx.ICON_ERROR) as dlg:
+                        dlg.ShowModal()
+                    return
+                self.editor.NewTab(gcode)
             return
         elif menu_id == self.ID_SETTINGS:
             if self.settings_frame is None:

@@ -23,6 +23,7 @@ class ogcEditorsNotebook(wx.Window):
     def __init__(self, parent):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(ogcEditorsNotebook, self).__init__(parent, style=style)
+        self.min_size = [640, 480]
         self.current = False
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.image_list = wx.ImageList(16, 16)
@@ -31,15 +32,15 @@ class ogcEditorsNotebook(wx.Window):
         self.notebook = wx.Notebook(self)
         self.notebook.SetImageList(self.image_list)
         self.tabs = []
-        self.NewTab()
+        self.AddPlaceHolder()
         box_main.Add(self.notebook, 1, wx.EXPAND)
         self.SetSizerAndFit(box_main)
         self.Show(True)
         return
 
-    def NewTab(self):
+    def NewTab(self, gcode):
         self.RemovePlaceHolder()
-        editor = ogcEditorPanel(self.notebook)
+        editor = ogcEditorPanel(self.notebook, gcode)
         self.tabs.append(editor)
         self.notebook.AddPage(editor, " Geometry " + str(len(self.tabs)))
         self.notebook.ChangeSelection(len(self.tabs)-1)
@@ -68,7 +69,7 @@ class ogcEditorsNotebook(wx.Window):
     def AddPlaceHolder(self):
         if len(self.tabs):
             return
-        placeholder = ogcPlaceHolder(self.notebook, "All Geometries Are Closed.")
+        placeholder = ogcPlaceHolder(self.notebook, self.min_size, "All Geometries Are Closed.")
         self.tabs.append(placeholder)
         self.notebook.AddPage(placeholder, " No Open Geometry.")
         self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_PLACEHLDR)

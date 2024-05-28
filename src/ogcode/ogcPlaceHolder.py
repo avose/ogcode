@@ -11,8 +11,10 @@ import wx
 
 ################################################################################################
 class ogcPlaceHolder(wx.Window):
-        def __init__(self, parent, message):
+        def __init__(self, parent, min_size=[16, 16], message=""):
             super(ogcPlaceHolder, self).__init__(parent)
+            self.min_size = min_size
+            self.SetMinSize(self.min_size)
             self.message = message
             self.SetBackgroundColour((0,0,0))
             box_main = wx.BoxSizer(wx.VERTICAL)
@@ -25,6 +27,7 @@ class ogcPlaceHolder(wx.Window):
             p_message.SetSizerAndFit(box_messg)
             box_panel.Add(p_message, 1, wx.ALIGN_CENTER)
             box_main.Add(box_panel, 1, wx.ALIGN_CENTER)
+            box_main.SetMinSize(self.min_size)
             self.SetSizerAndFit(box_main)
             self.Show(True)
             return
