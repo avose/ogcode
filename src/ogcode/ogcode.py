@@ -34,7 +34,7 @@ class ogcFrame(wx.Frame):
                           size = (1366, 768))
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.icon = wx.Icon()
-        self.icon.CopyFromBitmap(ogcIcons.Get('chart_organisation'))
+        self.icon.CopyFromBitmap(ogcIcons.Get('page_edit'))
         self.SetIcon(self.icon)
         self.InitUI()
         return
@@ -44,7 +44,7 @@ class ogcFrame(wx.Frame):
         # File menu.
         menu_file = wx.Menu()
         item = wx.MenuItem(menu_file, self.ID_OPEN_FILE, text="Open File")
-        item.SetBitmap(ogcIcons.Get('monitor_add'))
+        item.SetBitmap(ogcIcons.Get('page_add'))
         menu_file.Append(item)
         item = wx.MenuItem(menu_file, self.ID_EXIT, text="Quit")
         item.SetBitmap(ogcIcons.Get('cross'))
