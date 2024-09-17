@@ -14,6 +14,7 @@ import wx
 from .ogcApp import ogcApp
 from .ogcHelp import ogcAboutFrame, ogcLicenseFrame
 from .ogcIcons import ogcIcons
+from .ogcUpload import ogcUploadFrame
 from .ogcVersion import ogcVersion
 from .ogcStatusBar import ogcStatusBar
 from .ogcEditorsPanel import ogcEditorsPanel
@@ -26,6 +27,7 @@ class ogcFrame(wx.Frame):
     ID_LICENSE   = 1002
     ID_ABOUT     = 1003
     ID_SETTINGS  = 1004
+    ID_UPLOAD    = 1005
     ID_EXIT      = 1006
 
     def __init__(self, app):
@@ -50,6 +52,12 @@ class ogcFrame(wx.Frame):
         item.SetBitmap(ogcIcons.Get('cross'))
         menu_file.Append(item)
         menubar.Append(menu_file, 'File')
+        # Laser menu.
+        menu_laser = wx.Menu()
+        item = wx.MenuItem(menu_laser, self.ID_UPLOAD, text="Upload G-Code")
+        item.SetBitmap(ogcIcons.Get('page_go'))
+        menu_laser.Append(item)
+        menubar.Append(menu_laser, 'Laser')
         # Edit menu.
         menu_edit = wx.Menu()
         item = wx.MenuItem(menu_edit, self.ID_SETTINGS, text="Settings")
@@ -68,6 +76,7 @@ class ogcFrame(wx.Frame):
         # Connect menus to menu bar.
         self.SetMenuBar(menubar)
         self.Bind(wx.EVT_MENU, self.MenuHandler)
+        self.upload_frame = None
         self.settings_frame = None
         self.about_frame = None
         self.license_frame = None
@@ -129,13 +138,19 @@ class ogcFrame(wx.Frame):
             else:
                 self.settings_frame.Raise()
             return
+        elif menu_id == self.ID_UPLOAD:
+            if self.upload_frame is None:
+                self.upload_frame = ogcUploadFrame(self)
+            else:
+                self.upload_frame.Raise()
+            return
         elif menu_id == self.ID_ABOUT:
             if self.about_frame is None:
                 self.about_frame = ogcAboutFrame(self)
             else:
                 self.about_frame.Raise()
             return
-        if menu_id == self.ID_LICENSE:
+        elif menu_id == self.ID_LICENSE:
             if self.license_frame is None:
                 self.license_frame = ogcLicenseFrame(self)
             else:
@@ -144,6 +159,8 @@ class ogcFrame(wx.Frame):
         return
 
     def OnClose(self, event=None):
+        if self.upload_frame is not None:
+            self.upload_frame.OnClose()
         if self.settings_frame is not None:
             self.settings_frame.OnClose()
         if self.about_frame is not None:

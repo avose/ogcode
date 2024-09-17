@@ -8,10 +8,17 @@ This file holds the code for IO with the microcontroller consuming the G-Code da
 ################################################################################################
 
 import serial
+import serial.tools.list_ports
 
 ################################################################################################
 
 class ogcSerialDriver:
+
+    @staticmethod
+    def get_ports():
+        # ports = [ (port, desc, hwid) ]
+        ports_details = serial.tools.list_ports.comports()
+        return ports_details
 
     def __init__(self, port_name):
         # Open and configure the serial port.
