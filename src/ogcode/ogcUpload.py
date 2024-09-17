@@ -12,8 +12,6 @@ import wx
 from .ogcIcons import ogcIcons
 from .ogcSerialDriver import ogcSerialDriver
 
-from string import ascii_lowercase as ascii_lc
-
 
 ################################################################################################
 class ogcUploadPanel(wx.Panel):
@@ -34,9 +32,7 @@ class ogcUploadPanel(wx.Panel):
             self, -1, size=(-1, 64),
             style=wx.TE_READONLY | wx.TE_MULTILINE
         )
-        box_detail = wx.BoxSizer(wx.VERTICAL)
-        box_detail.Add(self.tc_detail, 0, wx.EXPAND | wx.ALL, 5)
-        box_main.Add(box_detail, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        box_main.Add(self.tc_detail, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
         # Controls.
         btn_ok = wx.Button(self, wx.ID_ANY, "Ok")
         btn_ok.Bind(wx.EVT_BUTTON, self.OnOk)
@@ -67,7 +63,7 @@ class ogcUploadPanel(wx.Panel):
         self.lb_ports.InsertItems(port_strings, 0)
         self.lb_ports.SetSelection(0)
         return
-    
+
     def OnSelectPort(self, evt):
         port_string = self.lb_ports.GetStringSelection()
         port, desc, hwid = self.ports[port_string]
@@ -76,14 +72,19 @@ class ogcUploadPanel(wx.Panel):
         self.tc_detail.SetValue(detail_string)
         self.Refresh()
         return
-    
+
     def OnOk(self, event):
-        self.Parent.Destroy()
+        self.OnClose()
         return
-    
+
     def OnCancel(self, event):
-        self.Parent.Destroy()
+        self.OnClose()
         return
+
+    def OnClose(self, event=None):
+        self.Parent.OnClose()
+        return
+
 
 ################################################################################################
 class ogcUploadFrame(wx.Frame):
@@ -98,9 +99,12 @@ class ogcUploadFrame(wx.Frame):
         box_main.Add(self.upload_panel)
         self.SetSizerAndFit(box_main)
         self.Show(True)
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
         return
 
-    def OnClose(self):
+    def OnClose(self, event=None):
+        self.Parent.upload_frame = None
+        self.Destroy()
         return
 
 ################################################################################################
