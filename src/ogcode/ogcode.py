@@ -114,19 +114,25 @@ class ogcFrame(wx.Frame):
                 # Do nothing if no file selected by user.
                 if file_dialog.ShowModal() != wx.ID_OK:
                     return
-                # Open G-code file and add to new editor tab.
-                gcode_path = file_dialog.GetPath()
-                try:
-                    with open(gcode_path, "r") as gfile:
-                        gcode = ogcGCode.gcScript(text=gfile.read())
-                except Exception as excptn:
-                    with wx.MessageDialog(self, "Failed to open G-code file:\n" +
-                                          f"\"{gcode_path}\"\n" +
-                                          f"\nError:\n{excptn}", caption="G-Code Error",
-                                          style=wx.OK|wx.ICON_ERROR) as dlg:
-                        dlg.ShowModal()
-                    return
-                self.editor.NewTab(gcode)
+                # Check if the file is an image file else assume gcode file.
+                file_path = file_dialog.GetPath()
+                if wx.Image.CanRead(file_path):
+                    # Load the image file and add to new image editor tab.
+                    image = wx.Image(file_path, wx.BITMAP_TYPE_ANY)
+                    self.editor.NewTab(image)
+                else:
+                    # Open G-code file and add to new editor tab.
+                    try:
+                        with open(file_path, "r") as gfile:
+                            gcode = ogcGCode.gcScript(text=gfile.read())
+                    except Exception as excptn:
+                        with wx.MessageDialog(self, "Failed to open G-code file:\n" +
+                                              f"\"{file_path}\"\n" +
+                                              f"\nError:\n{excptn}", caption="G-Code Error",
+                                              style=wx.OK|wx.ICON_ERROR) as dlg:
+                            dlg.ShowModal()
+                        return
+                    self.editor.NewTab(gcode)
             return
         elif menu_id == self.ID_SETTINGS:
             if self.settings_frame is None:

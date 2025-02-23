@@ -12,6 +12,7 @@ import wx
 from .ogcIcons import ogcIcons
 from .ogcEvents import ogcEvents
 from .ogcEditor import ogcEditorPanel
+from .ogcImageEditor import ogcImageEditorPanel
 from .ogcPlaceHolder import ogcPlaceHolder
 
 ################################################################################################
@@ -38,11 +39,16 @@ class ogcEditorsNotebook(wx.Window):
         self.Show(True)
         return
 
-    def NewTab(self, gcode):
+    def NewTab(self, data):
         self.RemovePlaceHolder()
-        editor = ogcEditorPanel(self.notebook, gcode)
-        self.tabs.append(editor)
-        self.notebook.AddPage(editor, " Geometry " + str(len(self.tabs)))
+        if isinstance(data, wx.Image):
+            editor = ogcImageEditorPanel(self.notebook, data)
+            self.tabs.append(editor)
+            self.notebook.AddPage(editor, " Image " + str(len(self.tabs)))
+        else:
+            editor = ogcEditorPanel(self.notebook, data)
+            self.tabs.append(editor)
+            self.notebook.AddPage(editor, " Geometry " + str(len(self.tabs)))
         self.notebook.ChangeSelection(len(self.tabs)-1)
         self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_EDITOR)
         return editor
@@ -69,9 +75,9 @@ class ogcEditorsNotebook(wx.Window):
     def AddPlaceHolder(self):
         if len(self.tabs):
             return
-        placeholder = ogcPlaceHolder(self.notebook, self.min_size, "All Geometries Are Closed.")
+        placeholder = ogcPlaceHolder(self.notebook, self.min_size, "All Files Are Closed.")
         self.tabs.append(placeholder)
-        self.notebook.AddPage(placeholder, " No Open Geometry.")
+        self.notebook.AddPage(placeholder, " No Open Files.")
         self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_PLACEHLDR)
         self.notebook.SetSelection(len(self.tabs)-1)
         return

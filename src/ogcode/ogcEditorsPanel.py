@@ -72,8 +72,8 @@ class ogcEditorsPanel(wx.Window):
         print("TODO: Toolbar: Zoom out.")
         return
 
-    def NewTab(self, gcode):
-        self.notebook.NewTab(gcode)
+    def NewTab(self, data):
+        self.notebook.NewTab(data)
         return
 
 ################################################################################################
