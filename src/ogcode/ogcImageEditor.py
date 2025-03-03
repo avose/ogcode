@@ -8,12 +8,11 @@ This file holds the code for the image editor.
 ################################################################################################
 
 import wx
-import cv2 as cv
-import numpy as np
 
 from .ogcIcons import ogcIcons
 from .ogcEvents import ogcEvents
 from .ogcSettings import ogcSettings
+from .ogcImage import ogcImage
 
 ################################################################################################
 
@@ -24,27 +23,46 @@ class ogcImageEditor(wx.Window):
         super(ogcImageEditor, self).__init__(parent,style=style)
         self.min_size = [640, 480]
         self.SetMinSize(self.min_size)
-        self.image = self.ProcessImage(image)
-        self.bitmap = wx.Bitmap(self.image)
+        self.orig_image = ogcImage(image)
+        self.bitmap = None
         self.dc_buffer = wx.Bitmap(*self.Size)
         self.color_fg = ogcSettings.Get('editor_fgcolor')
         self.color_bg = ogcSettings.Get('editor_bgcolor')
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Show(True)
+        wx.CallAfter(self.ProcessImage)
         return
 
-    def ProcessImage(self, wx_image):
-        image = np.frombuffer(wx_image.GetDataBuffer(), dtype='uint8')
-        image = image.reshape( (wx_image.GetHeight(), wx_image.GetWidth(), 3) )
-        grayscale = cv.cvtColor(image, cv.COLOR_RGB2GRAY)
-        edges = cv.Canny(grayscale, 100, 200)
-        edges_rgb = cv.cvtColor(edges, cv.COLOR_GRAY2RGB)
-        wx_image.SetData(edges_rgb.tostring())
-        return wx_image
+    def ProcessImage(self):
+        # Scale original image to internal representation size.
+        if self.orig_image.Width() < self.orig_image.Height():
+            dims = (1024, None)
+        else:
+            dims = (None, 1024)
+        self.image = ogcImage(self.orig_image, *dims)
+        # Find edges.
+        self.image = self.image.Edges()
+        # Scale image to widget size.
+        if self.Size[0] < self.Size[1]:
+            dims = (self.Size[0], None)
+        else:
+            dims = (None, self.Size[1])
+        print(f"widget: {self.Size[0]} {self.Size[1]}")
+        self.image = self.image.Resize(*dims)
+        print(f"{self.image.Shape()=}")
+        # Convert image to bitmap and redraw widget.
+        self.bitmap = wx.Bitmap(self.image.WXImage())
+        self.Refresh()
+        self.Update()
+        return
 
     def Draw(self, dc):
-        dc.DrawBitmap(self.bitmap, 0, 0)
+        if self.bitmap is not None:
+            # Draw image bitmap in center of widget.
+            xoff = (self.Size[0] - self.bitmap.GetHeight()) // 2
+            yoff = (self.Size[1] - self.bitmap.GetHeight()) // 2
+            dc.DrawBitmap(self.bitmap, xoff, yoff)
         return
 
     def OnPaint(self, event):
@@ -62,7 +80,9 @@ class ogcImageEditor(wx.Window):
 
     def OnSize(self, event):
         self.dc_buffer = wx.Bitmap(*self.Size)
+        self.ProcessImage()
         self.Refresh()
+        self.Update()
         return
 
 ################################################################################################

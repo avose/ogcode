@@ -18,7 +18,7 @@ class ogcSettingsManager():
     __defaults = { "path": os.path.join(os.path.expanduser("~"), ".ogcode"),
                    "log_level": 1,
                    "editor_fgcolor": (32,196,32),
-                   "editor_bgcolor": (0,0,0) }
+                   "editor_bgcolor": (64,64,64) }
 
     def __init__(self):
         if ogcSettingsManager.__settings is None:
