@@ -8,6 +8,8 @@ This file holds the code for the image editor.
 ################################################################################################
 
 import wx
+import cv2 as cv
+import numpy as np
 
 from .ogcIcons import ogcIcons
 from .ogcEvents import ogcEvents
@@ -22,7 +24,7 @@ class ogcImageEditor(wx.Window):
         super(ogcImageEditor, self).__init__(parent,style=style)
         self.min_size = [640, 480]
         self.SetMinSize(self.min_size)
-        self.image = image
+        self.image = self.ProcessImage(image)
         self.bitmap = wx.Bitmap(self.image)
         self.dc_buffer = wx.Bitmap(*self.Size)
         self.color_fg = ogcSettings.Get('editor_fgcolor')
@@ -31,6 +33,15 @@ class ogcImageEditor(wx.Window):
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Show(True)
         return
+
+    def ProcessImage(self, wx_image):
+        image = np.frombuffer(wx_image.GetDataBuffer(), dtype='uint8')
+        image = image.reshape( (wx_image.GetHeight(), wx_image.GetWidth(), 3) )
+        grayscale = cv.cvtColor(image, cv.COLOR_RGB2GRAY)
+        edges = cv.Canny(grayscale, 100, 200)
+        edges_rgb = cv.cvtColor(edges, cv.COLOR_GRAY2RGB)
+        wx_image.SetData(edges_rgb.tostring())
+        return wx_image
 
     def Draw(self, dc):
         dc.DrawBitmap(self.bitmap, 0, 0)
