@@ -48,9 +48,7 @@ class ogcImageEditor(wx.Window):
             dims = (self.Size[0], None)
         else:
             dims = (None, self.Size[1])
-        print(f"widget: {self.Size[0]} {self.Size[1]}")
         self.image = self.image.Resize(*dims)
-        print(f"{self.image.Shape()=}")
         # Convert image to bitmap and redraw widget.
         self.bitmap = wx.Bitmap(self.image.WXImage())
         self.Refresh()
@@ -61,8 +59,12 @@ class ogcImageEditor(wx.Window):
         if self.bitmap is not None:
             # Draw image bitmap in center of widget.
             xoff = (self.Size[0] - self.bitmap.GetHeight()) // 2
-            yoff = (self.Size[1] - self.bitmap.GetHeight()) // 2
+            yoff = (self.Size[1] - self.bitmap.GetWidth()) // 2
             dc.DrawBitmap(self.bitmap, xoff, yoff)
+            # Draw outline around bitmap.
+            dc.SetBrush(wx.Brush((0,0,0), wx.TRANSPARENT))
+            dc.SetPen(wx.Pen((255,0,255)))
+            dc.DrawRectangle(xoff, yoff, self.bitmap.GetWidth(), self.bitmap.GetHeight()-2)
         return
 
     def OnPaint(self, event):
