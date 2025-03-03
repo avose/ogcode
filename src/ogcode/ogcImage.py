@@ -98,7 +98,8 @@ class ogcImage():
 
     ################################################################
     # Replace image with scaled image and return self.
-    def Resize(self, width = None, height = None, interp = cv2.INTER_CUBIC):
+    def Resize(self, width = None, height = None, center=False, interp = cv2.INTER_CUBIC):
+        # !!avose: TODO: Add support for centering rectangular into square image.
         dims = None
         (h, w) = self.cv_image.shape[:2]
 

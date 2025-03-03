@@ -58,8 +58,8 @@ class ogcImageEditor(wx.Window):
     def Draw(self, dc):
         if self.bitmap is not None:
             # Draw image bitmap in center of widget.
-            xoff = (self.Size[0] - self.bitmap.GetHeight()) // 2
-            yoff = (self.Size[1] - self.bitmap.GetWidth()) // 2
+            xoff = (self.Size[0] - self.bitmap.GetWidth()) // 2
+            yoff = (self.Size[1] - self.bitmap.GetHeight()) // 2
             dc.DrawBitmap(self.bitmap, xoff, yoff)
             # Draw outline around bitmap.
             dc.SetBrush(wx.Brush((0,0,0), wx.TRANSPARENT))
