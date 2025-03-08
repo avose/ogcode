@@ -140,12 +140,20 @@ class ogcImage():
         (oh, ow) = self.cv_image.shape[:2]
         if width - ow >= 0 and height - oh >= 0:
             # Both dims of original are smaller than new canvas size.
-            if width - ow < height - oh:
+            if abs(width - ow) < abs(height - oh):
                 # Scale based on width (closest size match).
                 dims = (width, None)
             else:
                 # Scale based on height (closest size match).
-                dims = (None, Height)
+                dims = (None, height)
+        elif width - ow < 0 and height - oh < 0:
+            # Both dims of original are larger than new canvas size.
+            if ow > oh:
+                # Scale based on width (largest dim).
+                dims = (width, None)
+            else:
+                # Scale based on height (largest dim).
+                dims = (None, height)
         elif width - ow > 0:
             # Original width is smaller than new canvas width.
             dims = (None, height)
