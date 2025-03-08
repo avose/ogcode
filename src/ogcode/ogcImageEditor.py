@@ -36,11 +36,7 @@ class ogcImageEditor(wx.Window):
 
     def ProcessImage(self):
         # Scale original image to internal representation size.
-        if self.orig_image.Width() < self.orig_image.Height():
-            dims = (1024, None)
-        else:
-            dims = (None, 1024)
-        self.image = ogcImage(self.orig_image, *dims)
+        self.image = ogcImage(self.orig_image, width=1024, height=1024)
         # Find edges.
         self.image = self.image.Edges()
         # Scale image to widget size.

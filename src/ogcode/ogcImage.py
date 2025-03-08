@@ -39,11 +39,13 @@ class ogcImage():
                 self.cv_image = np.copy(image)
         else:
             # Require width and height to create an empty image.
-            self.cv_image = np.zeros((height, width, 3), dtype=np.int8)
+            self.cv_image = np.zeros((height, width, 3), dtype=np.uint8)
 
         # Resize to specified size if needed.
-        if width is not None or height is not None:
+        if width is None or height is None:
             self.Resize(width, height, interp)
+        else:
+            self.ResizeCanvas(width=width, height=height, interp=interp)
         return
 
     ################################################################
@@ -64,17 +66,20 @@ class ogcImage():
 
     ################################################################
     # Return image shape as (width, height).
-    def Shape(self):
+    @property
+    def shape(self):
         return (self.cv_image.shape[1], self.cv_image.shape[0])
 
     ################################################################
     # Return image width.
-    def Width(self):
+    @property
+    def width(self):
         return self.cv_image.shape[1]
 
     ################################################################
     # Return image height.
-    def Height(self):
+    @property
+    def height(self):
         return self.cv_image.shape[0]
 
     ################################################################
@@ -98,8 +103,7 @@ class ogcImage():
 
     ################################################################
     # Replace image with scaled image and return self.
-    def Resize(self, width = None, height = None, center=False, interp = cv2.INTER_CUBIC):
-        # !!avose: TODO: Add support for centering rectangular into square image.
+    def Resize(self, width = None, height = None, interp = cv2.INTER_CUBIC):
         dims = None
         (h, w) = self.cv_image.shape[:2]
 
@@ -127,6 +131,44 @@ class ogcImage():
             dims = (width, int(h * r))
         # Resize image and return self.
         self.cv_image = cv2.resize(self.cv_image, dims, interpolation=interp)
+        return self
+
+    ################################################################
+    # Replace image with image contents centered in new image and return self.
+    def ResizeCanvas(self, width, height, x = 0, y = 0, center = True, interp = cv2.INTER_CUBIC):
+        # Collect scaling parameters.
+        (oh, ow) = self.cv_image.shape[:2]
+        if width - ow >= 0 and height - oh >= 0:
+            # Both dims of original are smaller than new canvas size.
+            if width - ow < height - oh:
+                # Scale based on width (closest size match).
+                dims = (width, None)
+            else:
+                # Scale based on height (closest size match).
+                dims = (None, Height)
+        elif width - ow > 0:
+            # Original width is smaller than new canvas width.
+            dims = (None, height)
+        else:
+            # Original height is smaller than new canvas height.
+            dims = (width, None)
+
+        # Scale original image to fit in new canvas.
+        self.Resize(*dims, interp)
+
+        # Save (possibly scaled) original image.
+        orig = self.cv_image
+        (oh, ow) = orig.shape[:2]
+
+        # Create new image with new canvas size.
+        self.cv_image = np.zeros((height, width, 3), dtype=np.uint8)
+
+        # Compute offsets of original image in new canvas.
+        if center:
+            x, y = ((width - ow)//2 + x, (height - oh)//2 + y)
+
+        # Copy original image into new canvas and return self.
+        self.cv_image[y:y + oh, x:x + ow] = orig
         return self
 
 ################################################################################################
