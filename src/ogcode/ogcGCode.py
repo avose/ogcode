@@ -29,6 +29,21 @@ M5
 M2
 '''
 
+# Supported G-Code commands.
+'''
+F            # Feed rate
+G0 <X> <Y>   # Non-cutting rapid positioning
+G1 <X> <Y>   # Linear interpolation
+G17          # XY plane selection
+G20          # Units in inches
+G21          # Units in mm
+G64 <P>      # Path blending with tolerance P
+G90          # Absolute distance mode
+M3 <S>       # Start laser with power S
+M5           # Stop laser
+M2           # End of program
+'''
+
 ################################################################################################
 class gcParam():
     
