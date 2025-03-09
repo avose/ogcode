@@ -14,8 +14,8 @@ import wx
 from .ogcApp import ogcApp
 from .ogcHelp import ogcAboutFrame, ogcLicenseFrame
 from .ogcIcons import ogcIcons
-from .ogcUpload import ogcUploadFrame
 from .ogcVersion import ogcVersion
+from .ogcEngrave import ogcEngraveFrame
 from .ogcStatusBar import ogcStatusBar
 from .ogcEditorsPanel import ogcEditorsPanel
 
@@ -27,7 +27,7 @@ class ogcFrame(wx.Frame):
     ID_LICENSE   = 1002
     ID_ABOUT     = 1003
     ID_SETTINGS  = 1004
-    ID_UPLOAD    = 1005
+    ID_ENGRAVE   = 1005
     ID_EXIT      = 1006
 
     def __init__(self, app):
@@ -54,7 +54,7 @@ class ogcFrame(wx.Frame):
         menubar.Append(menu_file, 'File')
         # Laser menu.
         menu_laser = wx.Menu()
-        item = wx.MenuItem(menu_laser, self.ID_UPLOAD, text="Upload G-Code")
+        item = wx.MenuItem(menu_laser, self.ID_ENGRAVE, text="Engrave")
         item.SetBitmap(ogcIcons.Get('page_go'))
         menu_laser.Append(item)
         menubar.Append(menu_laser, 'Laser')
@@ -76,7 +76,7 @@ class ogcFrame(wx.Frame):
         # Connect menus to menu bar.
         self.SetMenuBar(menubar)
         self.Bind(wx.EVT_MENU, self.MenuHandler)
-        self.upload_frame = None
+        self.engrave_frame = None
         self.settings_frame = None
         self.about_frame = None
         self.license_frame = None
@@ -144,11 +144,11 @@ class ogcFrame(wx.Frame):
             else:
                 self.settings_frame.Raise()
             return
-        elif menu_id == self.ID_UPLOAD:
-            if self.upload_frame is None:
-                self.upload_frame = ogcUploadFrame(self)
+        elif menu_id == self.ID_ENGRAVE:
+            if self.engrave_frame is None:
+                self.engrave_frame = ogcEngraveFrame(self)
             else:
-                self.upload_frame.Raise()
+                self.engrave_frame.Raise()
             return
         elif menu_id == self.ID_ABOUT:
             if self.about_frame is None:
@@ -165,8 +165,8 @@ class ogcFrame(wx.Frame):
         return
 
     def OnClose(self, event=None):
-        if self.upload_frame is not None:
-            self.upload_frame.OnClose()
+        if self.engrave_frame is not None:
+            self.engrave_frame.OnClose()
         if self.settings_frame is not None:
             self.settings_frame.OnClose()
         if self.about_frame is not None:
