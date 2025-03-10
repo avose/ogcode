@@ -58,12 +58,11 @@ class ogcEditorsNotebook(wx.Window):
         # Return the current tab as an object.
         return self.tabs[self.notebook.GetSelection()]
 
-    def CloseEditor(self, editor):
+    def CloseTab(self, tab = None):
         # Close current tab and add a placeholder tab if needed.
-        if editor is None:
-            return
+        tab = self.CurrentTab() if tab is None else tab
         for i,t in enumerate(self.tabs):
-            if editor == t:
+            if tab == t:
                 self.notebook.DeletePage(i)
                 self.notebook.SendSizeEvent()
                 self.tabs.remove(self.tabs[i])

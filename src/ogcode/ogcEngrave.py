@@ -51,15 +51,15 @@ class ogcEngravePanel(wx.Panel):
         self.btn_engrave = wx.Button(self, wx.ID_ANY, "Engrave")
         self.btn_engrave.Bind(wx.EVT_BUTTON, self.OnEngrave)
         self.btn_engrave.SetBitmap(ogcIcons.Get('tick'))
-        btn_cancel = wx.Button(self, wx.ID_ANY, "Cancel")
-        btn_cancel.Bind(wx.EVT_BUTTON, self.OnCancel)
-        btn_cancel.SetBitmap(ogcIcons.Get('cross'))
-        btn_cancel.Bind(wx.EVT_BUTTON, self.OnCancel)
+        btn_close = wx.Button(self, wx.ID_ANY, "Close")
+        btn_close.Bind(wx.EVT_BUTTON, self.OnClose)
+        btn_close.SetBitmap(ogcIcons.Get('cross'))
+        btn_close.Bind(wx.EVT_BUTTON, self.OnClose)
         self.btn_stop = wx.Button(self, wx.ID_ANY, "Stop")
         self.btn_stop.Bind(wx.EVT_BUTTON, self.OnStop)
         self.btn_stop.SetBitmap(ogcIcons.Get('stop'))
         box_ctrl = wx.BoxSizer(wx.HORIZONTAL)
-        box_ctrl.Add(btn_cancel, 0, wx.EXPAND)
+        box_ctrl.Add(btn_close, 0, wx.EXPAND)
         box_ctrl.Add(self.btn_stop, 0, wx.EXPAND)
         box_ctrl.Add(self.btn_engrave, 0, wx.EXPAND)
         box_main.AddSpacer(10)
@@ -99,7 +99,7 @@ class ogcEngravePanel(wx.Panel):
 
     def OnSelectSerial(self, event):
         # Don't switch serial port if current one is not finished.
-        if self.serial and not self.serial.is_finished():
+        if self.serial and not self.serial.finished:
             self.cb_ports.SetSelection(self.port_index)
             return
         # Open selected serial port.
@@ -114,18 +114,18 @@ class ogcEngravePanel(wx.Panel):
 
     def OnSerialTimer(self, event):
         # Update engrave and stop button enabled states.
-        if not self.serial or self.serial.is_finished():
+        if not self.serial or self.serial.finished:
             self.btn_engrave.Enable()
             self.btn_stop.Disable()
         # Update progress bar.
-        progress = int(self.serial.progress()) if self.serial else 0
+        progress = int(self.serial.progress) if self.serial else 0
         self.progress.SetValue(int(progress))
         self.st_progress.SetLabel(f"Engrave Progress: {progress}%")
         return
 
     def OnEngrave(self, event):
         # Don't start engraving if already in progress.
-        if self.serial and not self.serial.is_finished():
+        if self.serial and not self.serial.finished:
             return
         # Disable the engrave and stop buttons as well as reset progress bar.
         self.progress.SetValue(0)
@@ -141,11 +141,6 @@ class ogcEngravePanel(wx.Panel):
         # Stop engraving.
         if self.serial:
             self.serial.stop()
-        return
-
-    def OnCancel(self, event):
-        # Close the engrave dialog.
-        self.OnClose()
         return
 
     def OnClose(self, event=None):

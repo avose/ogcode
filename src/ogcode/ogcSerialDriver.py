@@ -231,7 +231,8 @@ class ogcSerialDriver:
         self.error = []
         return
 
-    def is_finished(self):
+    @property
+    def finished(self):
         # Finished if no data.
         if self.data is None:
             return True
@@ -243,6 +244,7 @@ class ogcSerialDriver:
             finished = self.reader.done and self.writer.done
         return finished
 
+    @property
     def progress(self):
         # Return IO progress as a percentage.
         if not self.writer or not self.data:
@@ -264,18 +266,20 @@ class ogcSerialDriver:
         # Write G-Code to turn off laser and end current program.
         if self.debug:
             print("!! serial stop laser and flush")
-        self.serial.reset_input_buffer()
-        self.serial.reset_output_buffer()
-        self.serial.write("\nM5\nM2".encode(encoding="utf-8"))
-        self.serial.flush()
-        self.serial.reset_input_buffer()
-        self.serial.reset_output_buffer()
+        if self.serial.is_open:
+            self.serial.reset_input_buffer()
+            self.serial.reset_output_buffer()
+            self.serial.write("\nM5\nM2".encode(encoding="utf-8"))
+            self.serial.flush()
+            self.serial.reset_input_buffer()
+            self.serial.reset_output_buffer()
         return
 
     def close(self):
         # Stop IO and close serial port.
         self.stop()
-        self.serial.close()
+        if self.serial.is_open:
+            self.serial.close()
         return
 
 ################################################################################################

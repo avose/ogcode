@@ -32,7 +32,7 @@ class ogcFrame(wx.Frame):
 
     def __init__(self, app):
         self.app = app
-        wx.Frame.__init__(self, None, wx.ID_ANY, "OC-Code - "+ogcVersion,
+        wx.Frame.__init__(self, None, wx.ID_ANY, f"OG-Code - {ogcVersion}",
                           size = (1366, 768))
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.icon = wx.Icon()
