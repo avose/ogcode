@@ -14,7 +14,8 @@ from typing import Optional, List
 '''
 G90
 G20
-G17 G64 P0.001 M3 S16
+G17 G64 P0.001
+M3 S16
 F2.00
 G0 Z0.2500
 G0 X-126.4004 Y239.6813

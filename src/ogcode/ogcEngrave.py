@@ -17,10 +17,10 @@ from .ogcSerialDriver import ogcSerialDriver
 class ogcEngravePanel(wx.Panel):
 
     def SerialPortErrorMessage(self, port_index : int):
-        message = "Faile to open serial port:\n"
-        message += f"{self.port_strings[port_index]}\n\n"
-        message += f"{self.serial.error}"
-        caption = "Serial Port Error"
+        error_string = "\n".join( (f"[{error}]" for error in self.serial.error) )
+        message = f"Error(s):\n{error_string}\n\n"
+        message += f"Serial Port:\n{self.port_strings[port_index]}"
+        caption = "Error Engraving"
         dlg = wx.MessageDialog(self, message, caption, wx.OK | wx.ICON_ERROR)
         dlg.ShowModal()
         dlg.Destroy()
@@ -70,24 +70,46 @@ class ogcEngravePanel(wx.Panel):
         self.cb_ports.SetSelection(0)
         self.serial = None
         if len(ports_list) > 0:
-            self.serial = ogcSerialDriver(ports_list[0][0])
+            self.port_index = 0
+            self.serial = ogcSerialDriver(ports_list[self.port_index][0])
             if self.serial.error:
-                self.SerialPortErrorMessage(port_index)
+                self.SerialPortErrorMessage(self.port_index)
+        # Catch close event.
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
         return
 
     def OnSelectSerial(self, event):
         # Open selected serial port.
-        port_index = event.GetSelection()
-        port, _, _ = self.ports[self.port_strings[port_index]]
+        self.port_index = event.GetSelection()
+        port = self.ports[self.port_strings[self.port_index]][0]
         if self.serial:
             self.serial.close()
         self.serial = ogcSerialDriver(port)
         if self.serial.error:
-            self.SerialPortErrorMessage(port_index)
+            self.SerialPortErrorMessage(self.port_index)
         return
 
     def OnEngrave(self, event):
-        self.OnClose()
+        # Write G-Code data to serial port.
+        test_gcode = """G90
+G20
+G17 G64 P0.001
+M3 S16
+F2.00
+G0 Z0.2500
+G0 X-126.4004 Y239.6813
+G1 Z-0.0050
+G1 X-126.4004 Y239.6813
+G1 X-126.1612 Y239.5639
+G1 X-125.9311 Y239.4294
+G1 X-222.2960 Y37.9260
+G0 Z0.2500
+M5
+M2
+"""
+        self.serial.write(test_gcode)
+        if self.serial.error:
+            self.SerialPortErrorMessage(self.port_index)
         return
 
     def OnCancel(self, event):
@@ -98,7 +120,8 @@ class ogcEngravePanel(wx.Panel):
         if self.serial:
             self.serial.close()
             self.serial = None
-        self.Parent.OnClose()
+        if not self.Parent.closing:
+            self.Parent.OnClose()
         return
 
 
@@ -116,9 +139,12 @@ class ogcEngraveFrame(wx.Frame):
         self.SetSizerAndFit(box_main)
         self.Show(True)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
+        self.closing = False
         return
 
     def OnClose(self, event=None):
+        self.closing = True
+        self.engrave_panel.OnClose()
         self.Parent.engrave_frame = None
         self.Destroy()
         return
