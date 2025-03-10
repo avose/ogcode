@@ -21,12 +21,13 @@ class ogcSerialWriter(Thread):
     Writer will not have more outstanding line writes than parent ogcSerialDriver's set maximum.
     Writer increments parent's outsanding counter, and reader decrements, to track this.
     '''
-    def __init__(self, parent, serial):
+    def __init__(self, parent, serial, iota : int = 0.000001):
         Thread.__init__(self)
         self.parent = parent
         self.serial = serial
         self.index  = 0
         self.done   = False
+        self.iota   = iota
         return
 
     def run(self):
@@ -59,8 +60,8 @@ class ogcSerialWriter(Thread):
                         if self.parent.debug:
                             print(f"Serial Write [{self.parent.outstanding}][{self.index}]: {line}")
                         continue
-                # Yield the CPU to other threads if no write attempted due to max outstanding.
-                sleep(0.0000001)
+            # Yield the CPU to other threads if no write attempted due to max outstanding.
+            sleep(self.iota)
 
         # Writer thread is done.
         if self.parent.debug:
@@ -83,12 +84,13 @@ class ogcSerialReader(Thread):
     Writer will not have more outstanding line writes than parent ogcSerialDriver's set maximum.
     Writer increments parent's outsanding counter, and reader decrements, to track this.
     '''
-    def __init__(self, parent, serial):
+    def __init__(self, parent, serial, iota : int = 0.000001):
         Thread.__init__(self)
         self.parent = parent
         self.serial = serial
         self.done   = False
         self.ready  = False
+        self.iota   = iota
         return
 
     def run(self):
@@ -114,7 +116,7 @@ class ogcSerialReader(Thread):
             response = response.strip() if response is not None else response
             # Yield the CPU to other threads if no data read.
             if not response:
-                sleep(0.0000001)
+                sleep(self.iota)
                 continue
             # Decrement outstanding count if "ok" message received.
             if response == b'ok':
@@ -141,7 +143,7 @@ class ogcSerialReader(Thread):
                 if self.parent.debug:
                     print(error)
             # Yield the CPU to other threads.
-            sleep(0.0000001)
+            sleep(self.iota)
 
         # Writer thread is done.
         if self.parent.debug:

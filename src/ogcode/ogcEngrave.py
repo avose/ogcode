@@ -40,12 +40,12 @@ class ogcEngravePanel(wx.Panel):
         box_serial_port.Add(self.cb_ports, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
         box_main.Add(box_serial_port)
         # Progress bar.
-        self.st_progress = wx.StaticText(self, -1, "Engrave Progress:")
+        self.st_progress = wx.StaticText(self, -1, "Engrave Progress: 0%")
         progress_style = style=wx.GA_SMOOTH | wx.GA_HORIZONTAL | wx.GA_TEXT
-        self.progress = wx.Gauge(self, size=(640, 32), style=progress_style)
+        self.g_progress = wx.Gauge(self, size=(640, 32), style=progress_style)
         box_progress = wx.BoxSizer(wx.VERTICAL)
         box_progress.Add(self.st_progress, 0, wx.ALL, 5)
-        box_progress.Add(self.progress, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        box_progress.Add(self.g_progress, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
         box_main.Add(box_progress)
         # Controls.
         self.btn_engrave = wx.Button(self, wx.ID_ANY, "Engrave")
@@ -89,10 +89,11 @@ class ogcEngravePanel(wx.Panel):
         self.Layout()
         self.cb_ports.SetSelection(wx.NOT_FOUND)
         self.Show(True)
-        # Create a time to poll status of serial driver.
+        # Create a timer to poll status / progress of serial driver.
+        self.progress = 0
         self.serial_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.OnSerialTimer, self.serial_timer)
-        self.serial_timer.Start(50)
+        self.serial_timer.Start(100)
         # Catch close event.
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         return
@@ -119,8 +120,10 @@ class ogcEngravePanel(wx.Panel):
             self.btn_stop.Disable()
         # Update progress bar.
         progress = int(self.serial.progress) if self.serial else 0
-        self.progress.SetValue(int(progress))
-        self.st_progress.SetLabel(f"Engrave Progress: {progress}%")
+        if progress != self.progress:
+            self.progress = progress
+            self.g_progress.SetValue(int(self.progress))
+            self.st_progress.SetLabel(f"Engrave Progress: {self.progress}%")
         return
 
     def OnEngrave(self, event):
@@ -128,7 +131,7 @@ class ogcEngravePanel(wx.Panel):
         if self.serial and not self.serial.finished:
             return
         # Disable the engrave and stop buttons as well as reset progress bar.
-        self.progress.SetValue(0)
+        self.g_progress.SetValue(0)
         self.btn_engrave.Disable()
         self.btn_stop.Enable()
         # Write G-Code data to serial port.
