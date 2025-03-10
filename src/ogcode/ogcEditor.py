@@ -95,15 +95,23 @@ class ogcEditor(wx.Window):
 class ogcEditorPanel(wx.Window):
 
     def __init__(self, parent, gcode):
+        # Set style including desire for key events.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(ogcEditorPanel, self).__init__(parent,style=style)
-        self.gcode = gcode
         self.SetBackgroundColour((0,0,0))
+        # Save gcode.
+        self.gcode = gcode
+        # Add an ogcEditor.
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.editor = ogcEditor(self, self.gcode)
         box_main.Add(self.editor, 1, wx.EXPAND)
+        # Fit.
         self.SetSizerAndFit(box_main)
         self.Show(True)
         return
+
+    def GetGCode(self):
+        # Return this editor's gcode.
+        return self.gcode
 
 ################################################################################################

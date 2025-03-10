@@ -40,6 +40,7 @@ class ogcEditorsNotebook(wx.Window):
         return
 
     def NewTab(self, data):
+        # Remove placeholder and add a new tab.
         self.RemovePlaceHolder()
         if isinstance(data, wx.Image):
             editor = ogcImageEditorPanel(self.notebook, data)
@@ -53,7 +54,12 @@ class ogcEditorsNotebook(wx.Window):
         self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_EDITOR)
         return editor
 
+    def CurrentTab(self):
+        # Return the current tab as an object.
+        return self.tabs[self.notebook.GetSelection()]
+
     def CloseEditor(self, editor):
+        # Close current tab and add a placeholder tab if needed.
         if editor is None:
             return
         for i,t in enumerate(self.tabs):
@@ -65,6 +71,7 @@ class ogcEditorsNotebook(wx.Window):
         return
 
     def RemovePlaceHolder(self):
+        # Remove placeholder tab if there is one.
         if len(self.tabs) != 1 or not isinstance(self.tabs[0], ogcPlaceHolder):
             return
         self.notebook.DeletePage(0)
@@ -73,6 +80,7 @@ class ogcEditorsNotebook(wx.Window):
         return
 
     def AddPlaceHolder(self):
+        # Add placeholder tab if needed.
         if len(self.tabs):
             return
         placeholder = ogcPlaceHolder(self.notebook, self.min_size, "All Files Are Closed.")

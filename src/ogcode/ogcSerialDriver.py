@@ -30,7 +30,7 @@ class ogcSerialWriter(Thread):
         return
 
     def run(self):
-        # Wait for reader thread to be ready.
+        # Wait patiently for reader thread to be ready.
         ready = False
         while not self.done and not ready:
             with self.parent.lock:
@@ -42,7 +42,7 @@ class ogcSerialWriter(Thread):
             with self.parent.lock:
                 # Wait patiently if no data available to write.
                 if self.parent.data is None:
-                    sleep(1/10.0)
+                    sleep(1/100.0)
                     continue
                 # Check if finished writing data.
                 if self.index >= len(self.parent.data):
@@ -59,8 +59,8 @@ class ogcSerialWriter(Thread):
                         if self.parent.debug:
                             print(f"Serial Write [{self.parent.outstanding}][{self.index}]: {line}")
                         continue
-                # Wait for a tiny amount of time if no write attempted due to max outstanding.
-                sleep(1/10000.0)
+                # Yield the CPU to other threads if no write attempted due to max outstanding.
+                sleep(0.0000001)
 
         # Writer thread is done.
         if self.parent.debug:
@@ -71,7 +71,8 @@ class ogcSerialWriter(Thread):
         # Step done flag so writer thread will exit.
         if self.parent.debug:
             print("!! serial writer stop")
-        self.done = True
+        with self.parent.lock:
+            self.done = True
         return
 
 ################################################################################################
@@ -92,9 +93,9 @@ class ogcSerialReader(Thread):
 
     def run(self):
         # Flush any existing data from serial port and set ready flag.
-        if not self.done:
-            self.serial.flushInput()
         with self.parent.lock:
+            if not self.done:
+                self.serial.reset_input_buffer()
             self.ready = True
 
         # Loop until done.
@@ -102,16 +103,18 @@ class ogcSerialReader(Thread):
             # Read if there is an outstanding write, else wait patiently.
             response = None
             with self.parent.lock:
-                if self.parent.data is not None and self.parent.outstanding:
-                    response = self.serial.readline()
-            # Sleep for a while if no read attempted.
-            if response is None:
-                sleep(1/10.0)
-                continue
-            # Sleep for a tiny amount of time if read returned no data.
-            response = response.strip()
+                if self.parent.data is not None:
+                    if self.parent.outstanding:
+                        # There are outstanding write(s), so read a response line.
+                        response = self.serial.readline()
+                    elif self.parent.writer and self.parent.writer.done:
+                        # There are no outstanding write(s) and writer is done.
+                        self.done = True
+                        continue
+            response = response.strip() if response is not None else response
+            # Yield the CPU to other threads if no data read.
             if not response:
-                sleep(1/10000.0)
+                sleep(0.0000001)
                 continue
             # Decrement outstanding count if "ok" message received.
             if response == b'ok':
@@ -137,6 +140,8 @@ class ogcSerialReader(Thread):
                 self.parent.error.append(error)
                 if self.parent.debug:
                     print(error)
+            # Yield the CPU to other threads.
+            sleep(0.0000001)
 
         # Writer thread is done.
         if self.parent.debug:
@@ -145,9 +150,10 @@ class ogcSerialReader(Thread):
 
     def stop(self):
         # Step done flag so reader thread will exit.
-        self.done = True
         if self.parent.debug:
             print("!! serial reader stop")
+        with self.parent.lock:
+            self.done = True
         return
 
 ################################################################################################
@@ -173,8 +179,8 @@ class ogcSerialDriver:
         self.error = []
         try:
             self.serial.open()
-            self.serial.flushInput()
-            self.serial.flushOutput()
+            self.serial.reset_input_buffer()
+            self.serial.reset_output_buffer()
         except serial.SerialException as e:
             self.error.append(str(e))
         # Initialize maximum oustanding writes and current outstanding writes.
@@ -205,9 +211,11 @@ class ogcSerialDriver:
         if self.error:
             return
         # Set error if already running.
-        if self.writer or self.reader:
-            self.error.append("Write already in progress.")
-            return
+        with self.lock:
+            if (self.writer and not self.writer.done or
+                self.reader and not self.reader.done):
+                self.error.append("I/O already in progress.")
+                return
         # Set data field and start reader and writer threads.
         with self.lock:
             self.data = data
@@ -223,8 +231,27 @@ class ogcSerialDriver:
         self.error = []
         return
 
-    def close(self):
-        # Stop reader and writer threads.
+    def is_finished(self):
+        # Finished if no data.
+        if self.data is None:
+            return True
+        # Finished if no reader and writer threads.
+        if not self.reader and not self.writer:
+            return True
+        # Finished if reader and writer threads are done.
+        with self.lock:
+            finished = self.reader.done and self.writer.done
+        return finished
+
+    def progress(self):
+        # Return IO progress as a percentage.
+        if not self.writer or not self.data:
+            return 0
+        with self.lock:
+            return 100 * self.writer.index / len(self.data)
+
+    def stop(self):
+        # Stop reader and writer threads, reset data.
         if self.writer:
             self.writer.stop()
             self.writer.join()
@@ -233,7 +260,21 @@ class ogcSerialDriver:
             self.reader.stop()
             self.reader.join()
             self.reader = None
-        # Closer serial port.
+        self.data = None
+        # Write G-Code to turn off laser and end current program.
+        if self.debug:
+            print("!! serial stop laser and flush")
+        self.serial.reset_input_buffer()
+        self.serial.reset_output_buffer()
+        self.serial.write("\nM5\nM2".encode(encoding="utf-8"))
+        self.serial.flush()
+        self.serial.reset_input_buffer()
+        self.serial.reset_output_buffer()
+        return
+
+    def close(self):
+        # Stop IO and close serial port.
+        self.stop()
         self.serial.close()
         return
 

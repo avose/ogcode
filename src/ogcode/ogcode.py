@@ -135,6 +135,7 @@ class ogcFrame(wx.Frame):
                     self.editor.NewTab(gcode)
             return
         elif menu_id == self.ID_SETTINGS:
+            # Open settings dialog.
             if self.settings_frame is None:
                 # TODO: Settings dialog.
                 #self.settings_frame = ogcSettingsDialog(self)
@@ -145,18 +146,31 @@ class ogcFrame(wx.Frame):
                 self.settings_frame.Raise()
             return
         elif menu_id == self.ID_ENGRAVE:
+            # Open engrave dialog.
             if self.engrave_frame is None:
-                self.engrave_frame = ogcEngraveFrame(self)
+                tab = self.editor.CurrentTab()
+                if hasattr(tab, 'gcode'):
+                    gcode = self.editor.CurrentTab().gcode
+                    self.engrave_frame = ogcEngraveFrame(self, gcode)
+                else:
+                    message = f"Current tab has no associated G-Code.\n"
+                    message += "TODO: Finish writing image -> G-Code conversion."
+                    caption = "Error Engraving"
+                    dlg = wx.MessageDialog(self, message, caption, wx.OK | wx.ICON_ERROR)
+                    dlg.ShowModal()
+                    dlg.Destroy()
             else:
                 self.engrave_frame.Raise()
             return
         elif menu_id == self.ID_ABOUT:
+            # Open about dialog.
             if self.about_frame is None:
                 self.about_frame = ogcAboutFrame(self)
             else:
                 self.about_frame.Raise()
             return
         elif menu_id == self.ID_LICENSE:
+            # Open license dialog.
             if self.license_frame is None:
                 self.license_frame = ogcLicenseFrame(self)
             else:
@@ -165,14 +179,20 @@ class ogcFrame(wx.Frame):
         return
 
     def OnClose(self, event=None):
+        # Close any open dialogs.
         if self.engrave_frame is not None:
             self.engrave_frame.OnClose()
+            self.engrave_frame = None
         if self.settings_frame is not None:
             self.settings_frame.OnClose()
+            self.settings_frame = None
         if self.about_frame is not None:
             self.about_frame.OnClose()
+            self.about_frame = None
         if self.license_frame is not None:
             self.license_frame.OnClose()
+            self.license_frame = None
+        # Skip the event so it is propagated to other event handlers.
         if event is not None:
             event.Skip()
         return

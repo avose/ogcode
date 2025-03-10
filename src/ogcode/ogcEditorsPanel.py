@@ -76,4 +76,7 @@ class ogcEditorsPanel(wx.Window):
         self.notebook.NewTab(data)
         return
 
+    def CurrentTab(self):
+        return self.notebook.CurrentTab()
+
 ################################################################################################

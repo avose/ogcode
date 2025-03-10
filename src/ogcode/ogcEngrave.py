@@ -26,34 +26,44 @@ class ogcEngravePanel(wx.Panel):
         dlg.Destroy()
         return
 
-    def __init__(self, parent):
+    def __init__(self, parent, gcode):
         wx.Panel.__init__(self, parent, -1)
+        self.gcode = gcode
         # Main sizer.
         box_main = wx.BoxSizer(wx.VERTICAL)
         # Serial port list.
-        st_names = wx.StaticText(self, -1, "Serial Port:")
+        st_serial_port = wx.StaticText(self, -1, "Serial Port:")
         self.cb_ports = wx.ComboBox(self, size=(640, -1), style=wx.CB_READONLY)
         self.Bind(wx.EVT_COMBOBOX, self.OnSelectSerial)
-        box_list = wx.BoxSizer(wx.VERTICAL)
-        box_list.Add(st_names, 0, wx.ALL, 5)
-        box_list.Add(self.cb_ports, 0, wx.ALL, 5)
-        box_main.Add(box_list)
+        box_serial_port = wx.BoxSizer(wx.VERTICAL)
+        box_serial_port.Add(st_serial_port, 0, wx.ALL, 5)
+        box_serial_port.Add(self.cb_ports, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        box_main.Add(box_serial_port)
+        # Progress bar.
+        self.st_progress = wx.StaticText(self, -1, "Engrave Progress:")
+        progress_style = style=wx.GA_SMOOTH | wx.GA_HORIZONTAL | wx.GA_TEXT
+        self.progress = wx.Gauge(self, size=(640, 32), style=progress_style)
+        box_progress = wx.BoxSizer(wx.VERTICAL)
+        box_progress.Add(self.st_progress, 0, wx.ALL, 5)
+        box_progress.Add(self.progress, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        box_main.Add(box_progress)
         # Controls.
-        btn_engrave = wx.Button(self, wx.ID_ANY, "Engrave")
-        btn_engrave.Bind(wx.EVT_BUTTON, self.OnEngrave)
-        btn_engrave.SetBitmap(ogcIcons.Get('tick'))
+        self.btn_engrave = wx.Button(self, wx.ID_ANY, "Engrave")
+        self.btn_engrave.Bind(wx.EVT_BUTTON, self.OnEngrave)
+        self.btn_engrave.SetBitmap(ogcIcons.Get('tick'))
         btn_cancel = wx.Button(self, wx.ID_ANY, "Cancel")
         btn_cancel.Bind(wx.EVT_BUTTON, self.OnCancel)
         btn_cancel.SetBitmap(ogcIcons.Get('cross'))
+        btn_cancel.Bind(wx.EVT_BUTTON, self.OnCancel)
+        self.btn_stop = wx.Button(self, wx.ID_ANY, "Stop")
+        self.btn_stop.Bind(wx.EVT_BUTTON, self.OnStop)
+        self.btn_stop.SetBitmap(ogcIcons.Get('stop'))
         box_ctrl = wx.BoxSizer(wx.HORIZONTAL)
         box_ctrl.Add(btn_cancel, 0, wx.EXPAND)
-        box_ctrl.Add(btn_engrave, 0, wx.EXPAND)
+        box_ctrl.Add(self.btn_stop, 0, wx.EXPAND)
+        box_ctrl.Add(self.btn_engrave, 0, wx.EXPAND)
+        box_main.AddSpacer(10)
         box_main.Add(box_ctrl, 0, wx.ALIGN_RIGHT | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
-        # Fit.
-        self.SetSizerAndFit(box_main)
-        self.Layout()
-        self.cb_ports.SetSelection(wx.NOT_FOUND)
-        self.Show(True)
         # Collect serial ports, ordered by longest description first.
         ports_list = ogcSerialDriver.get_ports()
         ports_list.sort(key=lambda p: len(p[2]), reverse=True)
@@ -74,11 +84,24 @@ class ogcEngravePanel(wx.Panel):
             self.serial = ogcSerialDriver(ports_list[self.port_index][0])
             if self.serial.error:
                 self.SerialPortErrorMessage(self.port_index)
+        # Fit.
+        self.SetSizerAndFit(box_main)
+        self.Layout()
+        self.cb_ports.SetSelection(wx.NOT_FOUND)
+        self.Show(True)
+        # Create a time to poll status of serial driver.
+        self.serial_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self.OnSerialTimer, self.serial_timer)
+        self.serial_timer.Start(50)
         # Catch close event.
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         return
 
     def OnSelectSerial(self, event):
+        # Don't switch serial port if current one is not finished.
+        if self.serial and not self.serial.is_finished():
+            self.cb_ports.SetSelection(self.port_index)
+            return
         # Open selected serial port.
         self.port_index = event.GetSelection()
         port = self.ports[self.port_strings[self.port_index]][0]
@@ -89,34 +112,44 @@ class ogcEngravePanel(wx.Panel):
             self.SerialPortErrorMessage(self.port_index)
         return
 
+    def OnSerialTimer(self, event):
+        # Update engrave and stop button enabled states.
+        if not self.serial or self.serial.is_finished():
+            self.btn_engrave.Enable()
+            self.btn_stop.Disable()
+        # Update progress bar.
+        progress = int(self.serial.progress()) if self.serial else 0
+        self.progress.SetValue(int(progress))
+        self.st_progress.SetLabel(f"Engrave Progress: {progress}%")
+        return
+
     def OnEngrave(self, event):
+        # Don't start engraving if already in progress.
+        if self.serial and not self.serial.is_finished():
+            return
+        # Disable the engrave and stop buttons as well as reset progress bar.
+        self.progress.SetValue(0)
+        self.btn_engrave.Disable()
+        self.btn_stop.Enable()
         # Write G-Code data to serial port.
-        test_gcode = """G90
-G20
-G17 G64 P0.001
-M3 S16
-F2.00
-G0 Z0.2500
-G0 X-126.4004 Y239.6813
-G1 Z-0.0050
-G1 X-126.4004 Y239.6813
-G1 X-126.1612 Y239.5639
-G1 X-125.9311 Y239.4294
-G1 X-222.2960 Y37.9260
-G0 Z0.2500
-M5
-M2
-"""
-        self.serial.write(test_gcode)
+        self.serial.write(str(self.gcode))
         if self.serial.error:
             self.SerialPortErrorMessage(self.port_index)
         return
 
+    def OnStop(self, event):
+        # Stop engraving.
+        if self.serial:
+            self.serial.stop()
+        return
+
     def OnCancel(self, event):
+        # Close the engrave dialog.
         self.OnClose()
         return
 
     def OnClose(self, event=None):
+        # Close the engrave dialog.
         if self.serial:
             self.serial.close()
             self.serial = None
@@ -127,14 +160,15 @@ M2
 
 ################################################################################################
 class ogcEngraveFrame(wx.Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, gcode):
         wx.Frame.__init__(self, parent, title="Engrave", size=(800,600),
                           style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER)
+        self.gcode = gcode
         icon = wx.Icon()
         icon.CopyFromBitmap(ogcIcons.Get('page_go'))
         self.SetIcon(icon)
         box_main = wx.BoxSizer(wx.VERTICAL)
-        self.engrave_panel = ogcEngravePanel(self)
+        self.engrave_panel = ogcEngravePanel(self, gcode)
         box_main.Add(self.engrave_panel)
         self.SetSizerAndFit(box_main)
         self.Show(True)
