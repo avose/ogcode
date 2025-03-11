@@ -16,14 +16,14 @@ from .ogcSerialDriver import ogcSerialDriver
 ################################################################################################
 class ogcEngravePanel(wx.Panel):
 
-    def SerialPortErrorMessage(self, port_index : int):
-        error_string = "\n".join( (f"[{error}]" for error in self.serial.error) )
-        message = f"Error(s):\n{error_string}\n\n"
-        message += f"Serial Port:\n{self.port_strings[port_index]}"
-        caption = "Error Engraving"
-        dlg = wx.MessageDialog(self, message, caption, wx.OK | wx.ICON_ERROR)
-        dlg.ShowModal()
-        dlg.Destroy()
+    def UpdateMessages(self):
+        message = ""
+        error_string = ""
+        if self.serial:
+            error_string = "\n".join([f"[{error}]" for error in self.serial.error])
+        if error_string:
+            message += f"Error(s):\n{error_string}"
+        self.tc_messages.SetValue(message)
         return
 
     def __init__(self, parent, gcode):
@@ -47,6 +47,13 @@ class ogcEngravePanel(wx.Panel):
         box_progress.Add(self.st_progress, 0, wx.ALL, 5)
         box_progress.Add(self.g_progress, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
         box_main.Add(box_progress)
+        # Messages / errors.
+        st_messages = wx.StaticText(self, -1, "Messages:")
+        self.tc_messages = wx.TextCtrl(self, size=(640, 96), style=wx.TE_READONLY | wx.TE_MULTILINE)
+        box_messages = wx.BoxSizer(wx.VERTICAL)
+        box_messages.Add(st_messages, 0, wx.ALL, 5)
+        box_messages.Add(self.tc_messages, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        box_main.Add(box_messages)
         # Controls.
         self.btn_engrave = wx.Button(self, wx.ID_ANY, "Engrave")
         self.btn_engrave.Bind(wx.EVT_BUTTON, self.OnEngrave)
@@ -83,7 +90,7 @@ class ogcEngravePanel(wx.Panel):
             self.port_index = 0
             self.serial = ogcSerialDriver(ports_list[self.port_index][0])
             if self.serial.error:
-                self.SerialPortErrorMessage(self.port_index)
+                self.UpdateMessages()
         # Fit.
         self.SetSizerAndFit(box_main)
         self.Layout()
@@ -110,7 +117,7 @@ class ogcEngravePanel(wx.Panel):
             self.serial.close()
         self.serial = ogcSerialDriver(port)
         if self.serial.error:
-            self.SerialPortErrorMessage(self.port_index)
+            self.UpdateMessages()
         return
 
     def OnSerialTimer(self, event):
@@ -124,6 +131,8 @@ class ogcEngravePanel(wx.Panel):
             self.progress = progress
             self.g_progress.SetValue(int(self.progress))
             self.st_progress.SetLabel(f"Engrave Progress: {self.progress}%")
+        # Update messages.
+        self.UpdateMessages()
         return
 
     def OnEngrave(self, event):
@@ -137,7 +146,7 @@ class ogcEngravePanel(wx.Panel):
         # Write G-Code data to serial port.
         self.serial.write(str(self.gcode))
         if self.serial.error:
-            self.SerialPortErrorMessage(self.port_index)
+            self.UpdateMessages()
         return
 
     def OnStop(self, event):
