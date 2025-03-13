@@ -12,6 +12,7 @@ import serial.tools.list_ports
 
 from time import sleep
 from threading import Thread, Lock
+from datetime import datetime
 
 ################################################################################################
 
@@ -21,9 +22,10 @@ class ogcSerialWriter(Thread):
     Writer will not have more outstanding line writes than parent ogcSerialDriver's set maximum.
     Writer increments parent's outsanding counter, and reader decrements, to track this.
     '''
-    def __init__(self, parent, serial, iota : int = 0.000001):
+    def __init__(self, parent, serial, iota: int = 0.000001):
         Thread.__init__(self)
         self.parent = parent
+        self.lock   = self.parent.lock
         self.serial = serial
         self.index  = 0
         self.done   = False
@@ -34,13 +36,13 @@ class ogcSerialWriter(Thread):
         # Wait patiently for reader thread to be ready.
         ready = False
         while not self.done and not ready:
-            with self.parent.lock:
+            with self.lock:
                 ready = self.parent.reader.ready
             sleep(1/100.0)
 
         # Loop until done.
         while not self.done:
-            with self.parent.lock:
+            with self.lock:
                 # Wait patiently if no data available to write.
                 if self.parent.data is None:
                     sleep(1/100.0)
@@ -66,14 +68,15 @@ class ogcSerialWriter(Thread):
         # Writer thread is done.
         if self.parent.debug:
             print("!! serial writer done")
+        with self.lock:
+            self.parent.message("Writing completed.")
         return
 
     def stop(self):
         # Step done flag so writer thread will exit.
         if self.parent.debug:
             print("!! serial writer stop")
-        with self.parent.lock:
-            self.done = True
+        self.done = True
         return
 
 ################################################################################################
@@ -84,9 +87,10 @@ class ogcSerialReader(Thread):
     Writer will not have more outstanding line writes than parent ogcSerialDriver's set maximum.
     Writer increments parent's outsanding counter, and reader decrements, to track this.
     '''
-    def __init__(self, parent, serial, iota : int = 0.000001):
+    def __init__(self, parent, serial, iota: int = 0.000001):
         Thread.__init__(self)
         self.parent = parent
+        self.lock   = self.parent.lock
         self.serial = serial
         self.done   = False
         self.ready  = False
@@ -95,7 +99,7 @@ class ogcSerialReader(Thread):
 
     def run(self):
         # Flush any existing data from serial port and set ready flag.
-        with self.parent.lock:
+        with self.lock:
             if not self.done:
                 self.serial.reset_input_buffer()
             self.ready = True
@@ -104,7 +108,7 @@ class ogcSerialReader(Thread):
         while not self.done:
             # Read if there is an outstanding write, else wait patiently.
             response = None
-            with self.parent.lock:
+            with self.lock:
                 if self.parent.data is not None:
                     if self.parent.outstanding:
                         # There are outstanding write(s), so read a response line.
@@ -120,7 +124,7 @@ class ogcSerialReader(Thread):
                 continue
             # Decrement outstanding count if "ok" message received.
             if response == b'ok':
-                with self.parent.lock:
+                with self.lock:
                     self.parent.outstanding -= 1
                     if self.parent.debug:
                         print(f"Serial Read  [{self.parent.outstanding}]")
@@ -137,25 +141,28 @@ class ogcSerialReader(Thread):
                 except ValueError:
                     pass
             # Any other response is an error.
-            with self.parent.lock:
+            with self.lock:
                 error = f"Laser error: {response}"
-                self.parent.error.append(error)
+                self.parent.error(error)
                 if self.parent.debug:
                     print(error)
             # Yield the CPU to other threads.
             sleep(self.iota)
 
-        # Writer thread is done.
+        # Reader thread is done.
         if self.parent.debug:
             print("!! serial reader done")
+        with self.lock:
+            self.parent.message("Reading completed.")
+            elapsed = datetime.now() - self.parent.write_start_time
+            self.parent.message(f"Engrave time: {elapsed}")
         return
 
     def stop(self):
         # Step done flag so reader thread will exit.
         if self.parent.debug:
             print("!! serial reader stop")
-        with self.parent.lock:
-            self.done = True
+        self.done = True
         return
 
 ################################################################################################
@@ -172,19 +179,20 @@ class ogcSerialDriver:
         ports_details = serial.tools.list_ports.comports()
         return ports_details
 
-    def __init__(self, port_name: str, max_outstanding : int = 128):
+    def __init__(self, port_name: str, max_outstanding: int = 128):
         # Open and configure the serial port.
         self.debug = False
         self.serial = serial.Serial()
         self.serial.port = port_name
         self.configure()
-        self.error = []
+        self.errors = []
+        self.messages = []
         try:
             self.serial.open()
             self.serial.reset_input_buffer()
             self.serial.reset_output_buffer()
         except serial.SerialException as e:
-            self.error.append(str(e))
+            self.error(str(e))
         # Initialize maximum oustanding writes and current outstanding writes.
         self.max_outstanding = max_outstanding
         self.outstanding = 0
@@ -193,6 +201,8 @@ class ogcSerialDriver:
         self.lock = Lock()
         self.writer = None
         self.reader = None
+        # Record message for initialization completed.
+        self.message(f"Serial port '{port_name}' initialized.")
         return
 
     def configure(self):
@@ -208,15 +218,20 @@ class ogcSerialDriver:
         self.serial.writeTimeout = 0
         return
 
-    def write(self, data : str):
+    def write(self, data: str):
         # Do nothing if there is an error.
-        if self.error:
+        if self.errors:
             return
+        # Create message for this write and record start time.
+        self.write_start_time = datetime.now()
+        lines = data.count("\n") + 1
+        with self.lock:
+            self.message(f"Writing {len(data)} bytes with {lines} lines to laser.")
         # Set error if already running.
         with self.lock:
             if (self.writer and not self.writer.done or
                 self.reader and not self.reader.done):
-                self.error.append("I/O already in progress.")
+                self.error("I/O already in progress.")
                 return
         # Set data field and start reader and writer threads.
         with self.lock:
@@ -228,9 +243,28 @@ class ogcSerialDriver:
             self.reader.start()
         return
 
-    def clear_error(self):
+    def message(self, msg: str):
+        # Generate a timestamp string from current date and time.
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.messages.append(f"[{timestamp}] - {msg}")
+        return
+
+    def clear_messages(self):
+        # Clear accumulated messages.
+        self.messages = []
+        return
+
+    def error(self, err: str):
+        # Generate a timestamp string from current date and time.
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        msg = f"[{timestamp}] - {err}"
+        self.errors.append(msg)
+        self.messages.append(msg)
+        return
+
+    def clear_errors(self):
         # Clear error state.
-        self.error = []
+        self.errors = []
         return
 
     @property
@@ -275,6 +309,7 @@ class ogcSerialDriver:
             self.serial.flush()
             self.serial.reset_input_buffer()
             self.serial.reset_output_buffer()
+        self.message("Serial port stopped.")
         return
 
     def close(self):
@@ -282,6 +317,7 @@ class ogcSerialDriver:
         self.stop()
         if self.serial.is_open:
             self.serial.close()
+        self.message("Serial port closed.")
         return
 
 ################################################################################################
