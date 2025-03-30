@@ -95,32 +95,18 @@ class ogcImage():
     ################################################################
     # Replace image contents with image edges and return self.
     def Edges(self):
+        # Convert to grayscale.
         grayscale = cv2.cvtColor(self.cv_image, cv2.COLOR_RGB2GRAY)
+        # Extract edges.
         edges = cv2.Canny(grayscale, 100, 200)
+        # Find contours.
+        contours = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours = contours[0]
+        self.contours = [ list(c.reshape( (c.shape[0], 2) )) for c in contours ]
+        # Convert back to RGB.
         edges_rgb = cv2.cvtColor(edges, cv2.COLOR_GRAY2RGB)
         self.cv_image = edges_rgb
         return self
-
-    ################################################################
-    # Find contours.
-    def Contours(self):
-        grayscale = cv2.cvtColor(self.cv_image, cv2.COLOR_RGB2GRAY)
-        contours = cv2.findContours(grayscale, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        self.contours = contours[0]
-        #self.contour_hierarchy = contours[1][0]
-        #for h in self.contour_hierarchy:
-        #    next, prev, chld, prnt = h
-        #    print(f"{next}, {prev}, {chld}, {prnt}")
-        #print("")
-        #
-        #for c in self.contours:
-        #    c = c.reshape( (c.shape[0], 2) )
-        #    print(c.shape)
-        self.contours = np.concatenate(
-            [ c.reshape( (c.shape[0], 2) ) for c in self.contours ]
-        )
-        #print(self.contours.shape)
-        return self.contours
 
     ################################################################
     # Replace image with scaled image and return self.
