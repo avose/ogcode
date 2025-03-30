@@ -39,6 +39,7 @@ class ogcImageEditor(wx.Window):
         self.image = ogcImage(self.orig_image, width=1024, height=1024)
         # Find edges.
         self.image = self.image.Edges()
+        self.contours = self.image.Contours()
         # Scale image to widget size.
         if self.Size[0] < self.Size[1]:
             dims = (self.Size[0], None)
@@ -61,7 +62,12 @@ class ogcImageEditor(wx.Window):
             dc.SetBrush(wx.Brush((0,0,0), wx.TRANSPARENT))
             dc.SetPen(wx.Pen((255,0,255)))
             dc.DrawRectangle(xoff, yoff, self.bitmap.GetWidth(), self.bitmap.GetHeight()-2)
-        return
+            # Dray contour points.
+            dc.SetPen(wx.Pen((255,255,0)))
+            dc.SetBrush(wx.Brush((255,255,0)))
+            for x, y in self.contours:
+                dc.DrawCircle(x, y, 1)
+            return
 
     def OnPaint(self, event):
         # Paint with double buffering.
