@@ -66,6 +66,7 @@ class ogcImageEditorViewer(wx.Panel):
         self.dirty = True
         self.canny_min = event.min_value
         self.canny_max = event.max_value
+        self.ir_edges = ogcImage(self.ir_image).Edges(self.canny_min, self.canny_max)
 
     def OnShowImageChange(self, event):
         # Toggle image display.
@@ -91,9 +92,8 @@ class ogcImageEditorViewer(wx.Panel):
             # Draw contours if enabled.
             if self.show_contours:
                 dc.SetPen(wx.Pen((0, 255, 0)))
-                dc.SetBrush(wx.Brush((255, 255, 0)))
                 # Convert contours to NumPy arrays and scale to fit the bitmap.
-                contours = [np.array(contour) for contour in self.ir_edges.contours]
+                contours = list(self.ir_edges.contours)
                 if contours:
                     contours = [
                         c * [
@@ -110,16 +110,10 @@ class ogcImageEditorViewer(wx.Panel):
                     ]).reshape(-1, 2)
                     dc.DrawLineList(lines.astype(int).reshape(-1, 4).tolist())
                     # Extract and expand points for drawing.
-                    all_points = np.vstack(contours).astype(int)
-                    expanded_points = np.vstack([
-                        all_points + offset
-                        for offset in [(-1, -1), (0, -1), (1, -1),
-                                       (-1, 0), (0, 0), (1, 0),
-                                       (-1, 1), (0, 1), (1, 1)]
-                    ])
+                    points = np.vstack(contours).astype(int)
                     # Draw expanded points in red.
                     dc.SetPen(wx.Pen((255, 0, 0)))
-                    dc.DrawPointList(expanded_points.tolist())
+                    dc.DrawPointList(points.tolist())
 
             # Draw bounding box around the image.
             dc.SetBrush(wx.Brush((0, 0, 0), wx.TRANSPARENT))
@@ -239,10 +233,10 @@ class ogcImageEditorController(wx.Panel):
         # Ensure max is always greater than min.
         if min_value >= max_value:
             if event.EventObject == self.threshold_min_slider:
-                max_value = min_value + 1
+                max_value = min(255, min_value + 1)
                 self.threshold_max_slider.SetValue(max_value)
             else:
-                min_value = max_value - 1
+                min_value = max(0, max_value - 1)
                 self.threshold_min_slider.SetValue(min_value)
         # Update displayed values when sliders move.
         self.threshold_min_value.SetLabel(str(min_value))
