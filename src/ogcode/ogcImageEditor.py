@@ -20,6 +20,7 @@ from .ogcImage import ogcImage
 ThresholdEvent, EVT_THRESHOLD = wx.lib.newevent.NewEvent()
 ShowImageEvent, EVT_SHOW_IMAGE = wx.lib.newevent.NewEvent()
 ShowContoursEvent, EVT_SHOW_CONTOURS = wx.lib.newevent.NewEvent()
+IRSizeEvent, EVT_IR_SIZE = wx.lib.newevent.NewEvent()
 
 ################################################################################################
 
@@ -49,6 +50,7 @@ class ogcImageEditorViewer(wx.Panel):
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_IDLE, self.OnIdle)
         self.Bind(EVT_THRESHOLD, self.OnThresholdChange)
+        self.Bind(EVT_IR_SIZE, self.OnIRSizeChange)
         self.Bind(EVT_SHOW_IMAGE, self.OnShowImageChange)
         self.Bind(EVT_SHOW_CONTOURS, self.OnShowContoursChange)
         wx.CallAfter(self.OnSize)
@@ -60,6 +62,14 @@ class ogcImageEditorViewer(wx.Panel):
         dims = (self.Size[0], None) if self.Size[0] < self.Size[1] else (None, self.Size[1])
         self.image.Resize(*dims)
         self.bitmap = wx.Bitmap(self.image.WXImage())
+        return
+
+    def OnIRSizeChange(self, event):
+        # Update edge detection threshold and mark for redraw.
+        self.dirty = True
+        self.ir_size = event.value
+        self.ir_image = ogcImage(self.orig_image, width=self.ir_size, height=self.ir_size)
+        self.ir_edges = ogcImage(self.ir_image).Edges(self.canny_min, self.canny_max)
         return
 
     def OnThresholdChange(self, event):
@@ -152,58 +162,60 @@ class ogcImageEditorViewer(wx.Panel):
 
 ################################################################################################
 
+# Controller for the image editor UI panel
 class ogcImageEditorController(wx.Panel):
 
     def __init__(self, parent, image):
+        # Set up layout, controls, and event bindings for the editor panel.
         style = wx.BORDER_NONE
         super(ogcImageEditorController, self).__init__(parent, style=style)
         self.min_size = [150, 480]
         self.SetMinSize(self.min_size)
         self.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BACKGROUND))
-        # Main horizontal sizer.
         box_main = wx.BoxSizer(wx.HORIZONTAL)
 
-        # Thin black border on the left.
+        # Left border.
         border = wx.Panel(self, size=(2, -1), style=style)
         border.SetBackgroundColour(wx.Colour(0, 0, 0))
         box_main.Add(border, 0, wx.EXPAND | wx.RIGHT, 2)
 
+        # Main content layout.
         content = wx.Panel(self, style=style)
         box_content = wx.BoxSizer(wx.VERTICAL)
 
-        # IR Size input field.
+        # IR size dropdown.
         ir_size_label = wx.StaticText(content, label="IR Size:")
-        self.ir_size_ctrl = wx.TextCtrl(content, style=wx.TE_PROCESS_ENTER, size=(50, -1))
+        self.ir_size_choices = ["Small (512)", "Medium (1024)", "Large (2048)"]
+        self.ir_size_values = {"Small (512)": 512, "Medium (1024)": 1024, "Large (2048)": 2048}
+        self.ir_size_ctrl = wx.Choice(content, choices=self.ir_size_choices)
+        self.ir_size_ctrl.SetSelection(1)
 
-        # Threshold min slider with label.
+        # Threshold sliders.
         threshold_min_label = wx.StaticText(content, label="Threshold Min:")
         self.threshold_min_slider = wx.Slider(content, minValue=0, maxValue=255, style=wx.SL_HORIZONTAL)
         self.threshold_min_slider.SetValue(100)
         self.threshold_min_value = wx.StaticText(content, label="100", size=(30, -1))
 
-        # Threshold max slider with label.
         threshold_max_label = wx.StaticText(content, label="Threshold Max:")
         self.threshold_max_slider = wx.Slider(content, minValue=0, maxValue=255, style=wx.SL_HORIZONTAL)
         self.threshold_max_slider.SetValue(200)
         self.threshold_max_value = wx.StaticText(content, label="200", size=(30, -1))
 
-        # Horizontal sizer for min slider and its value display.
         box_min_slider = wx.BoxSizer(wx.HORIZONTAL)
         box_min_slider.Add(self.threshold_min_slider, 1, wx.EXPAND | wx.RIGHT, 1)
         box_min_slider.Add(self.threshold_min_value, 0, wx.ALIGN_CENTER_VERTICAL)
 
-        # Horizontal sizer for max slider and its value display.
         box_max_slider = wx.BoxSizer(wx.HORIZONTAL)
         box_max_slider.Add(self.threshold_max_slider, 1, wx.EXPAND | wx.RIGHT, 1)
         box_max_slider.Add(self.threshold_max_value, 0, wx.ALIGN_CENTER_VERTICAL)
 
-        # Checkboxes for "Show Image" and "Show Contours".
+        # Checkboxes.
         self.show_image_checkbox = wx.CheckBox(content, label="Show Image")
         self.show_contours_checkbox = wx.CheckBox(content, label="Show Contours")
         self.show_image_checkbox.SetValue(True)
         self.show_contours_checkbox.SetValue(True)
 
-        # Adding elements to the content sizer.
+        # Layout order.
         box_content.Add(ir_size_label, 0, wx.LEFT | wx.TOP, 2)
         box_content.Add(self.ir_size_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 2)
         box_content.Add(threshold_min_label, 0, wx.LEFT | wx.TOP, 2)
@@ -217,12 +229,10 @@ class ogcImageEditorController(wx.Panel):
         box_main.Add(content, 1, wx.EXPAND)
         self.SetSizer(box_main)
 
-        # Bind IR size input field.
-        self.ir_size_ctrl.Bind(wx.EVT_TEXT_ENTER, self.OnIRSizeChange)
-        # Bind slider movement events.
+        # Bind events.
+        self.ir_size_ctrl.Bind(wx.EVT_CHOICE, self.OnIRSizeChange)
         self.threshold_min_slider.Bind(wx.EVT_SLIDER, self.OnThresholdChange)
         self.threshold_max_slider.Bind(wx.EVT_SLIDER, self.OnThresholdChange)
-        # Bind checkbox events.
         self.show_image_checkbox.Bind(wx.EVT_CHECKBOX, self.OnShowImageChange)
         self.show_contours_checkbox.Bind(wx.EVT_CHECKBOX, self.OnShowContoursChange)
 
@@ -230,13 +240,17 @@ class ogcImageEditorController(wx.Panel):
         return
 
     def OnIRSizeChange(self, event):
-        # Handle IR size change event.
+        # Notify parent that IR size is changed.
+        selection = self.ir_size_ctrl.GetStringSelection()
+        ir_size_value = self.ir_size_values.get(selection, 1024)
+        ir_size_event = IRSizeEvent(value=ir_size_value)
+        wx.PostEvent(self.Parent, ir_size_event)
         return
 
     def OnThresholdChange(self, event):
+        # Update min and max threshold values, ensuring min < max.
         min_value = self.threshold_min_slider.GetValue()
         max_value = self.threshold_max_slider.GetValue()
-        # Ensure max is always greater than min.
         if min_value >= max_value:
             if event.EventObject == self.threshold_min_slider:
                 max_value = min(255, min_value + 1)
@@ -244,26 +258,22 @@ class ogcImageEditorController(wx.Panel):
             else:
                 min_value = max(0, max_value - 1)
                 self.threshold_min_slider.SetValue(min_value)
-        # Update displayed values when sliders move.
         self.threshold_min_value.SetLabel(str(min_value))
         self.threshold_max_value.SetLabel(str(max_value))
-        # Post event to parent.
         threshold_event = ThresholdEvent(min_value=min_value, max_value=max_value)
         wx.PostEvent(self.Parent, threshold_event)
         return
 
     def OnShowImageChange(self, event):
-        # Get current checkbox value.
+        # Notify parent when show image checkbox is toggled.
         show_image_value = self.show_image_checkbox.GetValue()
-        # Post event to notify parent of "Show Image" checkbox state change.
         show_image_event = ShowImageEvent(value=show_image_value)
         wx.PostEvent(self.Parent, show_image_event)
         return
 
     def OnShowContoursChange(self, event):
-        # Get current checkbox value.
+        # Notify parent when show contours checkbox is toggled.
         show_contours_value = self.show_contours_checkbox.GetValue()
-        # Post event to notify parent of "Show Contours" checkbox state change.
         show_contours_event = ShowContoursEvent(value=show_contours_value)
         wx.PostEvent(self.Parent, show_contours_event)
         return
@@ -292,6 +302,7 @@ class ogcImageEditorPanel(wx.Panel):
         self.SetSizerAndFit(box_main)
         # Bind custom events to the appropriate handler methods.
         self.Bind(EVT_THRESHOLD, self.OnThresholdChange)
+        self.Bind(EVT_IR_SIZE, self.OnIRSizeChange)
         self.Bind(EVT_SHOW_IMAGE, self.OnShowImageChange)
         self.Bind(EVT_SHOW_CONTOURS, self.OnShowContoursChange)
         # Display the panel.
@@ -301,6 +312,12 @@ class ogcImageEditorPanel(wx.Panel):
     def OnThresholdChange(self, event):
         # Forward threshold event to the viewer.
         viewer_event = ThresholdEvent(min_value=event.min_value, max_value=event.max_value)
+        wx.PostEvent(self.viewer, viewer_event)
+        return
+
+    def OnIRSizeChange(self, event):
+        # Forward IR size event to the viewer.
+        viewer_event = IRSizeEvent(value=event.value)
         wx.PostEvent(self.viewer, viewer_event)
         return
 
