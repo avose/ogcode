@@ -14,66 +14,133 @@ from .ogcIcons import ogcIcons
 from .ogcEvents import ogcEvents
 from .ogcSettings import ogcSettings
 from .ogcImage import ogcImage
+from .ogcGCode import gcScript
 
 ################################################################################################
 
+# Define custom events for interactivity and UI control.
 ThresholdEvent, EVT_THRESHOLD = wx.lib.newevent.NewEvent()
 ShowImageEvent, EVT_SHOW_IMAGE = wx.lib.newevent.NewEvent()
-ShowContoursEvent, EVT_SHOW_CONTOURS = wx.lib.newevent.NewEvent()
+ShowLinesEvent, EVT_SHOW_LINES = wx.lib.newevent.NewEvent()
 IRSizeEvent, EVT_IR_SIZE = wx.lib.newevent.NewEvent()
+GCodeEvent, EVT_GCODE = wx.lib.newevent.NewEvent()
 
 ################################################################################################
 
 class ogcImageEditorViewer(wx.Panel):
     def __init__(self, parent, image):
-        # Initialize the panel and set minimum size
+        # Initialize panel and image data.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super().__init__(parent, style=style)
         self.SetMinSize((640, 480))
-        # Save original image and build intermediate representation.
+        self.gcode = None
         self.orig_image = ogcImage(image)
         self.ir_size = 1024
         self.ir_image = ogcImage(self.orig_image, width=self.ir_size, height=self.ir_size)
         self.canny_min = 100
         self.canny_max = 200
         self.ir_edges = ogcImage(self.ir_image).Edges(self.canny_min, self.canny_max)
-        # Rendering settings.
+
+        # Rendering and view state.
         self.bitmap = None
-        self.dc_buffer = wx.Bitmap(*self.Size)
         self.color_fg = ogcSettings.Get("editor_fgcolor")
         self.color_bg = ogcSettings.Get("editor_bgcolor")
         self.dirty = True
         self.show_image = True
-        self.show_contours = True
-        # Bind event handlers.
+        self.show_lines = True
+
+        # Zoom and pan support.
+        self.zoom = 1.0
+        self.offset = np.array([0, 0], dtype=float)
+        self.drag_start = None
+        self.recenter_on_next_render = True
+
+        # Bind events.
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_IDLE, self.OnIdle)
+        self.Bind(wx.EVT_MOUSEWHEEL, self.OnMouseWheel)
+        self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
+        self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
+        self.Bind(wx.EVT_MOTION, self.OnMouseMove)
         self.Bind(EVT_THRESHOLD, self.OnThresholdChange)
         self.Bind(EVT_IR_SIZE, self.OnIRSizeChange)
         self.Bind(EVT_SHOW_IMAGE, self.OnShowImageChange)
-        self.Bind(EVT_SHOW_CONTOURS, self.OnShowContoursChange)
+        self.Bind(EVT_SHOW_LINES, self.OnShowLinesChange)
+
         wx.CallAfter(self.OnSize)
         return
 
+    def OnMouseWheel(self, event):
+        # Zoom in/out centered on the mouse position with multiplicative scaling.
+        rotation = event.GetWheelRotation()
+        factor = 1.1 if rotation > 0 else 1.0 / 1.1
+        new_zoom = max(0.1, min(self.zoom * factor, 32.0))
+
+        if not np.isclose(new_zoom, self.zoom):
+            mouse_pos = np.array(event.GetPosition())
+            image_pos = (mouse_pos - self.offset) / self.zoom
+            self.zoom = new_zoom
+            self.offset = mouse_pos - image_pos * self.zoom
+            self.dirty = True
+        return
+
+    def OnRightDown(self, event):
+        # Begin dragging for panning.
+        self.drag_start = np.array(event.GetPosition())
+        self.CaptureMouse()
+        return
+
+    def OnRightUp(self, event):
+        # End dragging.
+        if self.HasCapture():
+            self.ReleaseMouse()
+        self.drag_start = None
+        return
+
+    def OnMouseMove(self, event):
+        # Handle panning motion.
+        if event.Dragging() and event.RightIsDown() and self.drag_start is not None:
+            pos = np.array(event.GetPosition())
+            delta = pos - self.drag_start
+            self.offset += delta
+            self.drag_start = pos
+            self.dirty = True
+        return
+
     def ProcessImage(self):
-        # Process and resize the image for edge detection.
+        # Resize image and regenerate bitmap.
         self.image = ogcImage(self.ir_image)
         dims = (self.Size[0], None) if self.Size[0] < self.Size[1] else (None, self.Size[1])
         self.image.Resize(*dims)
         self.bitmap = wx.Bitmap(self.image.WXImage())
+
+        # Center image only if requested.
+        if self.recenter_on_next_render:
+            self.zoom = 1.0
+            self.offset = np.array([
+                (self.Size[0] - self.bitmap.GetWidth()) // 2,
+                (self.Size[1] - self.bitmap.GetHeight()) // 2
+            ], dtype=float)
+            self.recenter_on_next_render = False
+
+        # Update G-Code and post the event.
+        self.gcode = gcScript(lines=self.ir_edges.lines)
+        gcode_event = GCodeEvent(value=self.gcode)
+        wx.PostEvent(self.Parent, gcode_event)
         return
 
     def OnIRSizeChange(self, event):
-        # Update edge detection threshold and mark for redraw.
+        # Update intermediate image resolution and edge detection.
         self.dirty = True
+        self.recenter_on_next_render = True
         self.ir_size = event.value
         self.ir_image = ogcImage(self.orig_image, width=self.ir_size, height=self.ir_size)
         self.ir_edges = ogcImage(self.ir_image).Edges(self.canny_min, self.canny_max)
         return
 
     def OnThresholdChange(self, event):
-        # Update edge detection threshold and mark for redraw.
+        # Update edge detection thresholds.
         self.dirty = True
         self.canny_min = event.min_value
         self.canny_max = event.max_value
@@ -81,80 +148,70 @@ class ogcImageEditorViewer(wx.Panel):
         return
 
     def OnShowImageChange(self, event):
-        # Toggle image display.
+        # Toggle image visibility.
         if self.show_image != event.value:
             self.dirty = True
             self.show_image = event.value
         return
 
-    def OnShowContoursChange(self, event):
-        # Toggle contour display.
-        if self.show_contours != event.value:
+    def OnShowLinesChange(self, event):
+        # Toggle line overlay visibility.
+        if self.show_lines != event.value:
             self.dirty = True
-            self.show_contours = event.value
+            self.show_lines = event.value
         return
 
     def Draw(self, dc):
-        if self.bitmap is not None:
-            # Compute offsets to center the image.
-            xoff = (self.Size[0] - self.image.width) // 2
-            yoff = (self.Size[1] - self.image.height) // 2
-            # Draw image if enabled.
-            if self.show_image:
-                dc.DrawBitmap(self.bitmap, xoff, yoff)
+        # Render background, bitmap, and lines/points.
+        if self.bitmap is None:
+            return
 
-            # Draw contours if enabled.
-            if self.show_contours and self.ir_edges.contours:
-                # Scale contour points and offset them as needed.
-                contours = [
-                    c * [
-                        self.image.width / self.ir_size,
-                        self.image.height / self.ir_size
-                    ] + [xoff, yoff]
-                    for c in self.ir_edges.contours
-                ]
-                # Create line segments from contour points.
-                lines = np.vstack([
-                    np.column_stack([c, np.roll(c, -1, axis=0)])
-                    for c in contours
-                ]).reshape(-1, 4).astype(int)
-                # Draw lines.
-                dc.SetPen(wx.Pen((0, 255, 0)))
-                dc.DrawLineList(lines.tolist())
-                # Draw points.
-                points = np.vstack(contours).astype(int)
-                dc.SetPen(wx.Pen((255, 0, 0)))
-                dc.DrawPointList(points.tolist())
+        dc.SetBrush(wx.Brush(self.color_bg))
+        dc.SetPen(wx.Pen(self.color_bg))
+        dc.DrawRectangle(0, 0, self.Size[0], self.Size[1])
 
-            # Draw bounding box around the image.
-            dc.SetBrush(wx.Brush((0, 0, 0), wx.TRANSPARENT))
-            dc.SetPen(wx.Pen((255, 0, 255)))
-            dc.DrawRectangle(xoff, yoff, self.bitmap.GetWidth(), self.bitmap.GetHeight() - 2)
+        scale = np.array([self.image.width / self.ir_size, self.image.height / self.ir_size]) * self.zoom
+        offset = self.offset
+
+        if self.show_image:
+            gc = wx.GraphicsContext.Create(dc)
+            gc.PushState()
+            gc.Translate(*offset)
+            gc.Scale(self.zoom, self.zoom)
+            gc.DrawBitmap(self.bitmap, 0, 0, self.bitmap.GetWidth(), self.bitmap.GetHeight())
+            gc.PopState()
+
+        if self.show_lines and self.ir_edges.lines:
+            lines_array = np.array(self.ir_edges.lines)
+            scaled_lines = lines_array * scale + offset
+
+            lines = scaled_lines.reshape(-1, 4).astype(int).tolist()
+            points = scaled_lines.reshape(-1, 2).astype(int).tolist()
+
+            dc.SetPen(wx.Pen((0, 255, 0)))
+            dc.DrawLineList(lines)
+
+            dc.SetPen(wx.Pen((255, 0, 0)))
+            dc.DrawPointList(points)
+
         return
 
     def OnPaint(self, event):
-        # Handle window repaint with double buffering.
-        dc = wx.MemoryDC()
-        dc.SelectObject(self.dc_buffer)
-        dc.Clear()
-        dc.SetPen(wx.Pen(self.color_bg))
-        dc.SetBrush(wx.Brush(self.color_bg))
-        dc.DrawRectangle(0, 0, self.Size[0], self.Size[1])
+        # Triggered when the widget needs to be redrawn.
+        dc = wx.BufferedPaintDC(self)
         self.Draw(dc)
-        del dc
-        dc = wx.BufferedPaintDC(self, self.dc_buffer)
         return
 
     def OnSize(self, event=None):
-        # Mark for redraw when window is resized.
+        # Triggered when the widget is resized.
         self.dirty = True
+        self.recenter_on_next_render = True
         return
 
     def OnIdle(self, event):
-        # Redraw when idle if necessary.
+        # Redraw the view if needed.
         if self.dirty:
             self.dirty = False
-            self.dc_buffer = wx.Bitmap(*self.Size)
             self.ProcessImage()
             self.Refresh()
             self.Update()
@@ -162,7 +219,7 @@ class ogcImageEditorViewer(wx.Panel):
 
 ################################################################################################
 
-# Controller for the image editor UI panel
+# Controller for the image editor UI panel.
 class ogcImageEditorController(wx.Panel):
 
     def __init__(self, parent, image):
@@ -211,9 +268,9 @@ class ogcImageEditorController(wx.Panel):
 
         # Checkboxes.
         self.show_image_checkbox = wx.CheckBox(content, label="Show Image")
-        self.show_contours_checkbox = wx.CheckBox(content, label="Show Contours")
+        self.show_lines_checkbox = wx.CheckBox(content, label="Show Lines")
         self.show_image_checkbox.SetValue(True)
-        self.show_contours_checkbox.SetValue(True)
+        self.show_lines_checkbox.SetValue(True)
 
         # Layout order.
         box_content.Add(ir_size_label, 0, wx.LEFT | wx.TOP, 2)
@@ -223,7 +280,7 @@ class ogcImageEditorController(wx.Panel):
         box_content.Add(threshold_max_label, 0, wx.LEFT | wx.TOP, 0)
         box_content.Add(box_max_slider, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 1)
         box_content.Add(self.show_image_checkbox, 0, wx.LEFT | wx.TOP, 2)
-        box_content.Add(self.show_contours_checkbox, 0, wx.LEFT | wx.TOP | wx.BOTTOM, 2)
+        box_content.Add(self.show_lines_checkbox, 0, wx.LEFT | wx.TOP | wx.BOTTOM, 2)
 
         content.SetSizer(box_content)
         box_main.Add(content, 1, wx.EXPAND)
@@ -234,7 +291,7 @@ class ogcImageEditorController(wx.Panel):
         self.threshold_min_slider.Bind(wx.EVT_SLIDER, self.OnThresholdChange)
         self.threshold_max_slider.Bind(wx.EVT_SLIDER, self.OnThresholdChange)
         self.show_image_checkbox.Bind(wx.EVT_CHECKBOX, self.OnShowImageChange)
-        self.show_contours_checkbox.Bind(wx.EVT_CHECKBOX, self.OnShowContoursChange)
+        self.show_lines_checkbox.Bind(wx.EVT_CHECKBOX, self.OnShowLinesChange)
 
         self.Show(True)
         return
@@ -271,11 +328,11 @@ class ogcImageEditorController(wx.Panel):
         wx.PostEvent(self.Parent, show_image_event)
         return
 
-    def OnShowContoursChange(self, event):
-        # Notify parent when show contours checkbox is toggled.
-        show_contours_value = self.show_contours_checkbox.GetValue()
-        show_contours_event = ShowContoursEvent(value=show_contours_value)
-        wx.PostEvent(self.Parent, show_contours_event)
+    def OnShowLinesChange(self, event):
+        # Notify parent when show lines checkbox is toggled.
+        show_lines_value = self.show_lines_checkbox.GetValue()
+        show_lines_event = ShowLinesEvent(value=show_lines_value)
+        wx.PostEvent(self.Parent, show_lines_event)
         return
 
 ################################################################################################
@@ -301,36 +358,46 @@ class ogcImageEditorPanel(wx.Panel):
         # Apply the layout.
         self.SetSizerAndFit(box_main)
         # Bind custom events to the appropriate handler methods.
-        self.Bind(EVT_THRESHOLD, self.OnThresholdChange)
-        self.Bind(EVT_IR_SIZE, self.OnIRSizeChange)
-        self.Bind(EVT_SHOW_IMAGE, self.OnShowImageChange)
-        self.Bind(EVT_SHOW_CONTOURS, self.OnShowContoursChange)
+        self.Bind(EVT_THRESHOLD, self.OnThreshold)
+        self.Bind(EVT_IR_SIZE, self.OnIRSize)
+        self.Bind(EVT_SHOW_IMAGE, self.OnShowImage)
+        self.Bind(EVT_SHOW_LINES, self.OnShowLines)
+        self.Bind(EVT_GCODE, self.OnGCode)
         # Display the panel.
         self.Show(True)
         return
 
-    def OnThresholdChange(self, event):
+    def OnThreshold(self, event):
         # Forward threshold event to the viewer.
         viewer_event = ThresholdEvent(min_value=event.min_value, max_value=event.max_value)
         wx.PostEvent(self.viewer, viewer_event)
         return
 
-    def OnIRSizeChange(self, event):
+    def OnIRSize(self, event):
         # Forward IR size event to the viewer.
         viewer_event = IRSizeEvent(value=event.value)
         wx.PostEvent(self.viewer, viewer_event)
         return
 
-    def OnShowImageChange(self, event):
+    def OnShowImage(self, event):
         # Forward show image event to the viewer.
         show_image_event = ShowImageEvent(value=event.value)
         wx.PostEvent(self.viewer, show_image_event)
         return
 
-    def OnShowContoursChange(self, event):
-        # Forward show contours event to the viewer.
-        show_contours_event = ShowContoursEvent(value=event.value)
-        wx.PostEvent(self.viewer, show_contours_event)
+    def OnShowLines(self, event):
+        # Forward show lines event to the viewer.
+        show_lines_event = ShowLinesEvent(value=event.value)
+        wx.PostEvent(self.viewer, show_lines_event)
         return
+
+    def OnGCode(self, event):
+        # Save gcode to self.
+        self.gcode = event.value
+        return
+
+    def GetGCode(self):
+        # Return this editor's gcode.
+        return self.viewer.gcode
 
 ################################################################################################

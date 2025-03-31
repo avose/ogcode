@@ -9,6 +9,7 @@ This file holds code for representing and manipulating G-Code.
 
 import sys
 from typing import Optional, List
+import numpy as np
 
 # Example G-Code lines.
 '''
@@ -46,28 +47,26 @@ M2           # End of program
 '''
 
 ################################################################################################
+
 class gcParam():
-    
+    '''Represents a single G-Code parameter.'''
+
     def __init__(self, name: Optional[str] = None, value: Optional[float] = None,
                  text: Optional[str] = None):
-        # Validate arguments.
+        # Initialize either from name/value or a text string.
         if ((text is None and (name is None or value is None)) or
             (text is not None and (name is not None or value is not None))):
             raise ValueError("ERROR: Constructor requires either name and value or text.")
-        if name is not None:
-            if not isinstance(name, str):
-                raise ValueError("ERROR: 'name' must be None or string.")
+        if name is not None and not isinstance(name, str):
+            raise ValueError("ERROR: 'name' must be None or string.")
         if text is not None:
             if not isinstance(text, str):
                 raise ValueError("ERROR: 'text' must be None or string.")
-        # Parse text if needed.
-        if text is not None:
             try:
                 name = text[0:1]
                 value = float(text[1:])
             except:
                 raise ValueError(f"ERROR: Could not parse G-Code parameter: '{text}'")
-        # Set G-Code parameter's name and value.
         try:
             self.name = str(name)
             self.value = float(value)
@@ -76,15 +75,16 @@ class gcParam():
         return
 
     def __str__(self):
-        # Return string / text representation of this param.
         value = int(self.value) if self.value == int(self.value) else self.value
         return f"{self.name}{value}"
 
 ################################################################################################
+
 class gcCommand():
-    
+    '''Represents a single G-Code command composed of parameters (e.g., G1 X10 Y20).'''
+
     def __init__(self, params: Optional[List[gcParam]] = None, text: Optional[str] = None):
-        # Validate arguments.
+        # Initialize from parameter list or raw command text.
         if (params is None and text is None) or (params is not None and text is not None):
             raise ValueError("ERROR: Constructor requires either parameters list or text.")
         if params is not None:
@@ -94,42 +94,48 @@ class gcCommand():
         if text is not None:
             if not isinstance(text, str):
                 raise ValueError("ERROR: 'text' must be None or string.")
-        # Parse text if needed.
-        if text is not None:
             try:
                 params = [ gcParam(text=word) for word in text.split() ]
             except:
                 raise ValueError(f"ERROR: Failed to create G-Code parameters from: '{text}'")
             if len(params) == 0:
                 raise ValueError(f"ERROR: No G-Code parameters found in: '{text}'")
-        # Set G-Code command's parameters.
         self.params = params
         self.code = params[0]
         self.args = params[1:]
         return
 
     def __str__(self):
-        # Return string / text representation of this command.
         return " ".join([str(param) for param in self.params])
 
 ################################################################################################
+
 class gcScript():
+    '''Represents a complete G-Code script composed of gcCommand objects.'''
+
     _coord_min = -sys.float_info.max
     _coord_max = sys.float_info.max
-    
-    def __init__(self, commands: Optional[List[gcCommand]] = None, text: Optional[str] = None):
-        # Validate arguments.
-        if (commands is None and text is None) or (commands is not None and text is not None):
-            raise ValueError("ERROR: Constructor requires either command list or text.")
+
+    def __init__(self,
+                 commands: Optional[List[gcCommand]] = None,
+                 text: Optional[str] = None,
+                 lines: Optional[List[np.ndarray]] = None,
+                 laser_power: float = 16.0):
+        # Construct G-Code script from one of: command list, raw text, or line segments.
+        if sum([commands is not None, text is not None, lines is not None]) != 1:
+            raise ValueError("ERROR: Provide exactly one of commands, text, or lines.")
+
         if commands is not None:
+            # Use provided list of gcCommand objects.
             if (not isinstance(commands, list) or len(commands) == 0 or
                 not isinstance(commands[0], gcCommand)):
-                raise ValueError("ERROR: 'commands' must be None or non-empty list of gcCommand.")
-        if text is not None:
+                raise ValueError("ERROR: 'commands' must be non-empty list of gcCommand.")
+            self.commands = commands
+
+        elif text is not None:
+            # Parse raw G-code text into commands.
             if not isinstance(text, str):
-                raise ValueError("ERROR: 'text' must be None or string.")
-        # Parse text if needed.
-        if text is not None:
+                raise ValueError("ERROR: 'text' must be a string.")
             commands = []
             for ndx, line in enumerate(text.splitlines()):
                 try:
@@ -138,15 +144,50 @@ class gcScript():
                     raise ValueError(f"ERROR: Failed to create G-Code command from line {ndx}: '{line}'")
             if len(commands) == 0:
                 raise ValueError(f"ERROR: No G-Code commands found in: '{text}'")
-        # Set G-Code script's commands.
-        self.commands = commands
+            self.commands = commands
+
+        elif lines is not None:
+            # Convert list of line segments into G-Code commands.
+            if (not isinstance(lines, list) or
+                not all(isinstance(line, np.ndarray) and line.shape == (2, 2) for line in lines)):
+                raise ValueError("ERROR: 'lines' must be a list of numpy arrays with shape (2, 2).")
+            self.commands = [
+                # Absolute positioning.
+                gcCommand([gcParam('G', 90)]),
+                # Units in mm.
+                gcCommand([gcParam('G', 21)]),
+                # XY plane, path blending.
+                gcCommand([gcParam('G', 17), gcParam('G', 64), gcParam('P', 0.001)]),
+                # Laser on.
+                gcCommand([gcParam('M', 3), gcParam('S', laser_power)]),
+                # Feed rate.
+                gcCommand([gcParam('F', 2.00)])
+            ]
+            last_end = None
+            for line in lines:
+                x0, y0 = line[0]
+                x1, y1 = line[1]
+                if last_end is None or np.linalg.norm(line[0] - last_end) > 1.0:
+                    # Lift and reposition if far from previous line.
+                    self.commands.append(gcCommand([gcParam('G', 0), gcParam('Z', 0.25)]))
+                    self.commands.append(gcCommand([gcParam('G', 0), gcParam('X', x0), gcParam('Y', y0)]))
+                    self.commands.append(gcCommand([gcParam('G', 1), gcParam('Z', -0.005)]))
+                self.commands.append(gcCommand([gcParam('G', 1), gcParam('X', x1), gcParam('Y', y1)]))
+                last_end = line[1]
+            # Final lift.
+            self.commands.append(gcCommand([gcParam('G', 0), gcParam('Z', 0.25)]))
+            # Laser off.
+            self.commands.append(gcCommand([gcParam('M', 5)]))
+            # End program.
+            self.commands.append(gcCommand([gcParam('M', 2)]))
         return
 
     def __str__(self):
-        # Return string / text representation of this G-Code script.
+        # Render G-code as string.
         return "\n".join([str(command) for command in self.commands])
 
     def bounds(self):
+        # Compute bounding box of G-code motion.
         x_valid, y_valid = False, False
         x_min, x_max = self._coord_max, self._coord_min
         y_min, y_max = x_min, x_max

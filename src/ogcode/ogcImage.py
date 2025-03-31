@@ -10,8 +10,45 @@ This file holds image modification utilities.
 import wx
 import cv2
 import numpy as np
+from typing import List
 
 from .ogcSettings import ogcSettings
+
+################################################################################################
+
+def contours_to_lines(contours: List[np.ndarray]) -> List[np.ndarray]:
+    # Convert contours into individual line segments including closing edge using np.roll
+    lines = []
+    for contour in contours:
+        if len(contour) < 2:
+            continue
+        start_points = contour
+        end_points = np.roll(contour, -1, axis=0)
+        segment_pairs = np.stack([start_points, end_points], axis=1)
+        lines.extend(segment_pairs)
+    return lines
+
+
+def simplify_lines(lines: List[np.ndarray], min_length: float = 0.5) -> List[np.ndarray]:
+    # Simplify the list of lines by removing short or nearly overlapping segments
+    simplified = []
+    seen = []
+
+    for line in lines:
+        p1, p2 = line
+        length = np.linalg.norm(p2 - p1)
+        if length < min_length:
+            continue
+
+        # Normalize direction vector and sort endpoints
+        direction = (p2 - p1) / length
+        key = tuple(sorted([tuple(p1.round(3)), tuple(p2.round(3))]))
+
+        if key not in seen:
+            simplified.append(line)
+            seen.append(key)
+
+    return simplified
 
 ################################################################################################
 
@@ -102,7 +139,9 @@ class ogcImage():
         # Find contours.
         contours = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         contours = contours[0]
-        self.contours = [ c.reshape( (c.shape[0], 2) ) for c in contours ]
+        contours = [ c.reshape( (c.shape[0], 2) ) for c in contours ]
+        self.lines = contours_to_lines(contours)
+        self.lines = simplify_lines(self.lines, min_length=0.0)
         # Convert back to RGB.
         edges_rgb = cv2.cvtColor(edges, cv2.COLOR_GRAY2RGB)
         self.cv_image = edges_rgb
