@@ -102,7 +102,7 @@ class ogcImage():
         # Find contours.
         contours = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         contours = contours[0]
-        self.contours = [ list(c.reshape( (c.shape[0], 2) )) for c in contours ]
+        self.contours = [ c.reshape( (c.shape[0], 2) ) for c in contours ]
         # Convert back to RGB.
         edges_rgb = cv2.cvtColor(edges, cv2.COLOR_GRAY2RGB)
         self.cv_image = edges_rgb

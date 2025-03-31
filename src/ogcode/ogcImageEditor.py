@@ -8,7 +8,8 @@ This file holds the code for the image editor.
 ################################################################################################
 
 import wx
-from itertools import tee
+import numpy as np
+from itertools import chain
 
 from .ogcIcons import ogcIcons
 from .ogcEvents import ogcEvents
@@ -23,118 +24,115 @@ ShowContoursChangeEvent, EVT_SHOW_CONTOURS_CHANGE = wx.lib.newevent.NewEvent()
 
 ################################################################################################
 
-def pairwise(iterable):
-    "s -> (s0,s1), (s1,s2), (s2, s3), ..."
-    a, b = tee(iterable)
-    next(b, None)
-    return zip(a, b)
-
-################################################################################################
-
 class ogcImageEditorViewer(wx.Panel):
-
     def __init__(self, parent, image):
+        # Initialize the panel and set minimum size
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
-        super(ogcImageEditorViewer, self).__init__(parent,style=style)
-        self.min_size = [640, 480]
-        self.SetMinSize(self.min_size)
+        super().__init__(parent, style=style)
+        self.SetMinSize((640, 480))
         self.orig_image = ogcImage(image)
         self.bitmap = None
         self.dc_buffer = wx.Bitmap(*self.Size)
-        self.color_fg = ogcSettings.Get('editor_fgcolor')
-        self.color_bg = ogcSettings.Get('editor_bgcolor')
+        self.color_fg = ogcSettings.Get("editor_fgcolor")
+        self.color_bg = ogcSettings.Get("editor_bgcolor")
         self.dirty = True
         self.ir_size = 1024
         self.canny_min = 100
         self.canny_max = 200
         self.show_image = True
         self.show_contours = True
+
+        # Bind event handlers
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_IDLE, self.OnIdle)
         self.Bind(EVT_THRESHOLD_CHANGE, self.OnThresholdChange)
         self.Bind(EVT_SHOW_IMAGE_CHANGE, self.OnShowImageChange)
         self.Bind(EVT_SHOW_CONTOURS_CHANGE, self.OnShowContoursChange)
-        self.Show(True)
+
         wx.CallAfter(self.OnSize)
-        return
 
     def ProcessImage(self):
-        # Scale original image to internal representation size.
+        # Process and resize the image for edge detection
         self.image = ogcImage(self.orig_image, width=self.ir_size, height=self.ir_size)
-        self.edges = ogcImage(self.image)
-        # Find edges.
-        self.edges = self.edges.Edges(self.canny_min, self.canny_max)
-        # Scale image to widget size.
-        if self.Size[0] < self.Size[1]:
-            dims = (self.Size[0], None)
-        else:
-            dims = (None, self.Size[1])
+        self.edges = ogcImage(self.image).Edges(self.canny_min, self.canny_max)
+        dims = (self.Size[0], None) if self.Size[0] < self.Size[1] else (None, self.Size[1])
         self.image = self.image.Resize(*dims)
         self.edges = self.edges.Resize(*dims)
-        # Convert image to bitmap and redraw widget.
         self.bitmap = wx.Bitmap(self.image.WXImage())
-        return
 
     def OnThresholdChange(self, event):
-        # Reprocess image with new threshold.
+        # Update edge detection threshold and mark for redraw
         self.dirty = True
         self.canny_min = event.min_value
         self.canny_max = event.max_value
-        return
 
     def OnShowImageChange(self, event):
-        # Update display of image.
+        # Toggle image display
         if self.show_image != event.value:
             self.dirty = True
             self.show_image = event.value
-        return
 
     def OnShowContoursChange(self, event):
-        # Update display of contours.
+        # Toggle contour display
         if self.show_contours != event.value:
             self.dirty = True
             self.show_contours = event.value
-        return
 
     def Draw(self, dc):
         if self.bitmap is not None:
-            # Compute offsets.
+            # Compute offsets to center the image
             xoff = (self.Size[0] - self.bitmap.GetWidth()) // 2
             yoff = (self.Size[1] - self.bitmap.GetHeight()) // 2
-            # Draw image bitmap in center of widget if needed.
+
+            # Draw image if enabled
             if self.show_image:
                 dc.DrawBitmap(self.bitmap, xoff, yoff)
-            # Draw contours if needed.
+
+            # Draw contours if enabled
             if self.show_contours:
-                # Draw contour lines.
-                dc.SetPen(wx.Pen((0,255,0)))
-                dc.SetBrush(wx.Brush((0,255,0)))
-                for contour in self.edges.contours:
-                    for p0, p1 in pairwise(contour + [contour[0]]):
-                        x0, y0 = p0
-                        x1, y1 = p1
-                        x0 = int(x0/self.ir_size * self.bitmap.GetWidth() + xoff)
-                        x1 = int(x1/self.ir_size * self.bitmap.GetWidth() + xoff)
-                        y0 = int(y0/self.ir_size * self.bitmap.GetHeight() + yoff)
-                        y1 = int(y1/self.ir_size * self.bitmap.GetHeight() + yoff)
-                        dc.DrawLine(x0, y0, x1, y1)
-                # Draw contour points.
-                dc.SetPen(wx.Pen((255,255,0)))
-                dc.SetBrush(wx.Brush((255,255,0)))
-                for contour in self.edges.contours:
-                    for x, y in contour:
-                        x = int(x/self.ir_size * self.bitmap.GetWidth() + xoff)
-                        y = int(y/self.ir_size * self.bitmap.GetHeight() + yoff)
-                        dc.DrawCircle(x, y, 1)
-            # Draw outline.
-            dc.SetBrush(wx.Brush((0,0,0), wx.TRANSPARENT))
-            dc.SetPen(wx.Pen((255,0,255)))
-            dc.DrawRectangle(xoff, yoff, self.bitmap.GetWidth(), self.bitmap.GetHeight()-2)
-        return
+                dc.SetPen(wx.Pen((0, 255, 0)))
+                dc.SetBrush(wx.Brush((255, 255, 0)))
+
+                # Convert contours to NumPy arrays and scale to fit the bitmap
+                contours = [np.array(contour) for contour in self.edges.contours]
+                if contours:
+                    contours = [
+                        c * [
+                            self.bitmap.GetWidth() / self.ir_size,
+                            self.bitmap.GetHeight() / self.ir_size
+                        ]
+                        for c in contours
+                    ]
+                    contours = [c + [xoff, yoff] for c in contours]
+
+                    # Create line segments from contour points
+                    lines = np.vstack([
+                        np.column_stack([c, np.roll(c, -1, axis=0)])
+                        for c in contours
+                    ]).reshape(-1, 2)
+                    dc.DrawLineList(lines.astype(int).reshape(-1, 4).tolist())
+
+                    # Extract and expand points for drawing
+                    all_points = np.vstack(contours).astype(int)
+                    expanded_points = np.vstack([
+                        all_points + offset
+                        for offset in [(-1, -1), (0, -1), (1, -1),
+                                       (-1, 0), (0, 0), (1, 0),
+                                       (-1, 1), (0, 1), (1, 1)]
+                    ])
+
+                    # Draw expanded points in red
+                    dc.SetPen(wx.Pen((255, 0, 0)))
+                    dc.DrawPointList(expanded_points.tolist())
+
+            # Draw bounding box around the image
+            dc.SetBrush(wx.Brush((0, 0, 0), wx.TRANSPARENT))
+            dc.SetPen(wx.Pen((255, 0, 255)))
+            dc.DrawRectangle(xoff, yoff, self.bitmap.GetWidth(), self.bitmap.GetHeight() - 2)
 
     def OnPaint(self, event):
-        # Paint with double buffering.
+        # Handle window repaint with double buffering
         dc = wx.MemoryDC()
         dc.SelectObject(self.dc_buffer)
         dc.Clear()
@@ -144,22 +142,19 @@ class ogcImageEditorViewer(wx.Panel):
         self.Draw(dc)
         del dc
         dc = wx.BufferedPaintDC(self, self.dc_buffer)
-        return
 
-    def OnSize(self, event = None):
-        # Set dirty flag to trigger redraw when idle.
+    def OnSize(self, event=None):
+        # Mark for redraw when window is resized
         self.dirty = True
-        return
 
     def OnIdle(self, event):
-        # Perform a redraw if dirty and idle.
+        # Redraw when idle if necessary
         if self.dirty:
             self.dirty = False
             self.dc_buffer = wx.Bitmap(*self.Size)
             self.ProcessImage()
             self.Refresh()
             self.Update()
-        return
 
 ################################################################################################
 
