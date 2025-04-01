@@ -26,22 +26,37 @@ IRSizeEvent, EVT_IR_SIZE = wx.lib.newevent.NewEvent()
 LaserPowerEvent, EVT_LASER_POWER = wx.lib.newevent.NewEvent()
 GCodeEvent, EVT_GCODE = wx.lib.newevent.NewEvent()
 
+# Viewer modes.
+from enum import Enum
+class ViewerMode(Enum):
+    IMAGE = 1
+    GCODE = 2
+
 ################################################################################################
 
 class ogcImageEditorViewer(wx.Panel):
-    def __init__(self, parent, image):
-        # Initialize panel and image data.
+    def __init__(self, parent, data, mode):
+        # Initialize panel.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super().__init__(parent, style=style)
         self.SetMinSize((640, 480))
-        self.gcode = None
-        self.laser_power = 16
-        self.orig_image = ogcImage(image).Cleanup()
-        self.ir_size = 1024
-        self.ir_image = ogcImage(self.orig_image, width=self.ir_size, height=self.ir_size)
-        self.canny_min = 100
-        self.canny_max = 200
-        self.ir_edges = ogcImage(self.ir_image).Edges(self.canny_min, self.canny_max)
+        # Initialize data depending on mode.
+        self.mode = mode
+        self.data = data
+        if self.mode == ViewerMode.IMAGE:
+            self.gcode = None
+            self.laser_power = 16
+            self.orig_image = ogcImage(self.data).Cleanup()
+            self.ir_size = 1024
+            self.ir_image = ogcImage(self.orig_image, width=self.ir_size, height=self.ir_size)
+            self.canny_min = 100
+            self.canny_max = 200
+            self.ir_edges = ogcImage(self.ir_image).Edges(self.canny_min, self.canny_max)
+            self.lines = self.ir_edges.lines
+        elif self.mode == ViewerMode.GCODE:
+            self.gcode = self.data
+            self.laser_power = self.gcode.get_laser_power()
+            self.lines = self.gcode.to_lines()
 
         # Rendering and view state.
         self.bitmap = None
@@ -130,7 +145,7 @@ class ogcImageEditorViewer(wx.Panel):
             self.recenter_on_next_render = False
 
         # Update G-Code and post the event.
-        self.gcode = gcScript(lines=self.ir_edges.lines, laser_power=self.laser_power)
+        self.gcode = gcScript(lines=self.lines, laser_power=self.laser_power)
         gcode_event = GCodeEvent(value=self.gcode)
         wx.PostEvent(self.Parent, gcode_event)
         return
@@ -142,6 +157,7 @@ class ogcImageEditorViewer(wx.Panel):
         self.ir_size = event.value
         self.ir_image = ogcImage(self.orig_image, width=self.ir_size, height=self.ir_size)
         self.ir_edges = ogcImage(self.ir_image).Edges(self.canny_min, self.canny_max)
+        self.lines = self.ir_edges.lines
         return
 
     def OnThreshold(self, event):
@@ -150,6 +166,7 @@ class ogcImageEditorViewer(wx.Panel):
         self.canny_min = event.min_value
         self.canny_max = event.max_value
         self.ir_edges = ogcImage(self.ir_image).Edges(self.canny_min, self.canny_max)
+        self.lines = self.ir_edges.lines
         return
 
     def OnShowImage(self, event):
@@ -173,6 +190,18 @@ class ogcImageEditorViewer(wx.Panel):
             self.laser_power = event.value
         return
 
+    def DrawImage(self, dc):
+        # Draw image if needed.
+        if self.show_image:
+            # Draw the bitmap with a GC so it can be scaled easily.
+            gc = wx.GraphicsContext.Create(dc)
+            gc.PushState()
+            gc.Translate(*self.offset)
+            gc.Scale(self.zoom, self.zoom)
+            gc.DrawBitmap(self.bitmap, 0, 0, self.bitmap.GetWidth(), self.bitmap.GetHeight())
+            gc.PopState()
+        return
+
     def Draw(self, dc):
         # Avoid drawing too early, clear everything.
         if self.Size[0] <= 0 or self.Size[1] <= 0:
@@ -181,32 +210,41 @@ class ogcImageEditorViewer(wx.Panel):
         dc.SetPen(wx.Pen(self.color_bg))
         dc.DrawRectangle(0, 0, self.Size[0], self.Size[1])
 
-        # Draw nothing if there is no bitmap.
-        if self.bitmap is None:
-            return
+        # Change rendering based on mode.
+        if self.mode == ViewerMode.IMAGE:
+            # Draw nothing if there is no bitmap.
+            if self.bitmap is None:
+                return
+            # Draw image and compute line scaling from image if in image mode.
+            self.DrawImage(dc)
+            scale = np.array([self.image.width / self.ir_size,
+                              self.image.height / self.ir_size]) * self.zoom
+            # This correction is here to deal with some difference between the
+            # GC scaling vs the manual scaling with the points / lines and the DC.
+            # It seems to need to change based on the zoom level to line up perfectly.
+            offset_correction = np.array([1.5, 1.5]) * (self.zoom / 2.0)
+            offset = self.offset + offset_correction
+        elif self.mode == ViewerMode.GCODE:
+            # Compute scaling and offset from G-Code if in G-Code mode.
+            gcode_tl, gcode_br = self.gcode.bounds()
+            gcode_w = gcode_br[0] - gcode_tl[0]
+            gcode_h = gcode_br[1] - gcode_tl[1]
+            # Avoid division by zero.
+            if gcode_w == 0: gcode_w = 1
+            if gcode_h == 0: gcode_h = 1
+            # Compute base scale to fit G-code inside widget.
+            base_scale = np.array([self.Size[0] / gcode_w, self.Size[1] / gcode_h])
+            # Uniform scaling using the smaller axis
+            uniform_scale = min(base_scale)
+            # Final scale includes zoom
+            scale = np.array([uniform_scale, uniform_scale]) * self.zoom
+            # Offset from G-code origin and pan
+            offset = self.offset - (np.array(gcode_tl) * scale)
 
-        # Compute the scale and offset to use for points and lines.
-        scale = np.array([self.image.width / self.ir_size,
-                          self.image.height / self.ir_size]) * self.zoom
-        offset = self.offset
-        # This correction is here to deal with some difference between the
-        # GC scaling vs the manual scaling with the points / lines and the DC.
-        # It seems to need to change based on the zoom level to line up perfectly.
-        offset_correction = np.array([1.5, 1.5]) * (self.zoom / 2.0)
-
-        if self.show_image:
-            # Draw the bitmap with a GC so it can be scaled easily.
-            gc = wx.GraphicsContext.Create(dc)
-            gc.PushState()
-            gc.Translate(*offset)
-            gc.Scale(self.zoom, self.zoom)
-            gc.DrawBitmap(self.bitmap, 0, 0, self.bitmap.GetWidth(), self.bitmap.GetHeight())
-            gc.PopState()
-
-        if self.show_lines and self.ir_edges.lines:
+        if self.show_lines and self.lines:
             # Draw lines and points with a DC so we can pass lists.
-            lines_array = np.array(self.ir_edges.lines)
-            scaled_lines = lines_array * scale + offset + offset_correction
+            lines_array = np.array(self.lines)
+            scaled_lines = lines_array * scale + offset
             lines = np.round(scaled_lines.reshape(-1, 4)).astype(int).tolist()
             dc.SetPen(wx.Pen((0, 255, 0)))
             dc.DrawLineList(lines)
@@ -238,7 +276,8 @@ class ogcImageEditorViewer(wx.Panel):
         # Redraw the view if needed.
         if self.dirty:
             self.dirty = False
-            self.ProcessImage()
+            if self.mode == ViewerMode.IMAGE:
+                self.ProcessImage()
             self.Refresh()
             self.Update()
         return
@@ -248,7 +287,7 @@ class ogcImageEditorViewer(wx.Panel):
 # Controller for the image editor UI panel.
 class ogcImageEditorController(wx.Panel):
 
-    def __init__(self, parent, image):
+    def __init__(self, parent):
         # Set up layout, controls, and event bindings for the editor panel.
         style = wx.BORDER_NONE
         super(ogcImageEditorController, self).__init__(parent, style=style)
@@ -386,21 +425,25 @@ class ogcImageEditorController(wx.Panel):
 
 class ogcImageEditorPanel(wx.Panel):
 
-    def __init__(self, parent, image):
+    def __init__(self, parent, data):
         # Initialize the panel with border and character input support.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(ogcImageEditorPanel, self).__init__(parent, style=style)
         self.SetMinSize((640, 480))
-        # Set the image and panel background color.
-        self.image = image
         self.SetBackgroundColour((0, 0, 0))
+        # Create an image if passed image data, else use G-Code.
+        self.data = data
+        if isinstance(data, wx.Image):
+            self.mode = ViewerMode.IMAGE
+        else:
+            self.mode = ViewerMode.GCODE
         # Create and set up the main layout (viewer and controller).
         box_main = wx.BoxSizer(wx.HORIZONTAL)
-        self.viewer = ogcImageEditorViewer(self, self.image)
+        self.viewer = ogcImageEditorViewer(self, self.data, self.mode)
         box_main.Add(self.viewer, 1, wx.EXPAND)
         # Create and add the controller panel.
         box_controller = wx.BoxSizer(wx.VERTICAL)
-        self.controller = ogcImageEditorController(self, self.image)
+        self.controller = ogcImageEditorController(self)
         box_controller.Add(self.controller, 1, wx.EXPAND)
         box_main.Add(box_controller, 0, wx.EXPAND)
         # Apply the layout.

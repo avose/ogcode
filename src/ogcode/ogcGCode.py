@@ -116,6 +116,7 @@ class gcScript():
     _coord_min = -sys.float_info.max
     _coord_max = sys.float_info.max
 
+    ################################################################
     def __init__(self,
                  commands: Optional[List[gcCommand]] = None,
                  text: Optional[str] = None,
@@ -182,10 +183,62 @@ class gcScript():
             self.commands.append(gcCommand([gcParam('M', 2)]))
         return
 
+    ################################################################
     def __str__(self):
         # Render G-code as string.
         return "\n".join([str(command) for command in self.commands])
 
+    ################################################################
+    def to_lines(self) -> List[np.ndarray]:
+        # Convert G-code motion into drawable line segments, using only laser-on movement.
+        lines = []
+        current_pos = None
+        z_value = None
+
+        for command in self.commands:
+            if command.code.name != 'G':
+                continue
+
+            x = y = z = None
+            for arg in command.args:
+                if arg.name == 'X':
+                    x = arg.value
+                elif arg.name == 'Y':
+                    y = arg.value
+                elif arg.name == 'Z':
+                    z = arg.value
+
+            if z is not None:
+                z_value = z
+
+            if x is not None or y is not None:
+                next_pos = None
+                if current_pos is not None:
+                    next_pos = np.array([
+                        x if x is not None else current_pos[0],
+                        y if y is not None else current_pos[1]
+                    ])
+                elif x is not None and y is not None:
+                    next_pos = np.array([x, y])
+
+                if next_pos is not None:
+                    if z_value is not None and z_value < 0:
+                        lines.append(np.array([current_pos, next_pos]))
+                    current_pos = next_pos
+
+        return lines
+
+    ################################################################
+    def get_laser_power(self, default: int = 16) -> int:
+        # Return the first laser power (S value) found in the G-code as an integer.
+        for command in self.commands:
+            if command.code.name == 'M' and command.code.value == 3:
+                for arg in command.args:
+                    if arg.name == 'S':
+                        return int(round(arg.value))
+        return default
+
+    ################################################################
     def bounds(self):
         # Compute bounding box of G-code motion.
         x_valid, y_valid = False, False

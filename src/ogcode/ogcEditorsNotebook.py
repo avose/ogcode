@@ -11,7 +11,6 @@ import wx
 
 from .ogcIcons import ogcIcons
 from .ogcEvents import ogcEvents
-from .ogcEditor import ogcEditorPanel
 from .ogcImageEditor import ogcImageEditorPanel
 from .ogcPlaceHolder import ogcPlaceHolder
 
@@ -42,13 +41,11 @@ class ogcEditorsNotebook(wx.Window):
     def NewTab(self, data):
         # Remove placeholder and add a new tab.
         self.RemovePlaceHolder()
+        editor = ogcImageEditorPanel(self.notebook, data)
+        self.tabs.append(editor)
         if isinstance(data, wx.Image):
-            editor = ogcImageEditorPanel(self.notebook, data)
-            self.tabs.append(editor)
             self.notebook.AddPage(editor, " Image " + str(len(self.tabs)))
         else:
-            editor = ogcEditorPanel(self.notebook, data)
-            self.tabs.append(editor)
             self.notebook.AddPage(editor, " Geometry " + str(len(self.tabs)))
         self.notebook.ChangeSelection(len(self.tabs)-1)
         self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_EDITOR)

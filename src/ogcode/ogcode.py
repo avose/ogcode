@@ -149,16 +149,8 @@ class ogcFrame(wx.Frame):
             # Open engrave dialog.
             if self.engrave_frame is None:
                 tab = self.editor.CurrentTab()
-                if hasattr(tab, 'gcode'):
-                    gcode = self.editor.CurrentTab().gcode
-                    self.engrave_frame = ogcEngraveFrame(self, gcode)
-                else:
-                    message = f"Current tab has no associated G-Code.\n"
-                    message += "TODO: Finish writing image -> G-Code conversion."
-                    caption = "Error Engraving"
-                    dlg = wx.MessageDialog(self, message, caption, wx.OK | wx.ICON_ERROR)
-                    dlg.ShowModal()
-                    dlg.Destroy()
+                gcode = self.editor.CurrentTab().GetGCode()
+                self.engrave_frame = ogcEngraveFrame(self, gcode)
             else:
                 self.engrave_frame.Raise()
             return
