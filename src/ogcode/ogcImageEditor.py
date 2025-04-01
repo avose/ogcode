@@ -114,6 +114,7 @@ class ogcImageEditorViewer(wx.Panel):
     def ProcessImage(self):
         # Resize image and regenerate bitmap.
         self.image = ogcImage(self.ir_image)
+        # Debug view of the raster image used to simplify lines.
         #self.image = ogcImage(self.ir_edges)
         dims = (self.Size[0], None) if self.Size[0] < self.Size[1] else (None, self.Size[1])
         self.image.Resize(*dims)
@@ -173,18 +174,28 @@ class ogcImageEditorViewer(wx.Panel):
         return
 
     def Draw(self, dc):
-        # Render background, bitmap, and lines/points.
-        if self.bitmap is None:
+        # Avoid drawing too early, clear everything.
+        if self.Size[0] <= 0 or self.Size[1] <= 0:
             return
-
         dc.SetBrush(wx.Brush(self.color_bg))
         dc.SetPen(wx.Pen(self.color_bg))
         dc.DrawRectangle(0, 0, self.Size[0], self.Size[1])
 
-        scale = np.array([self.image.width / self.ir_size, self.image.height / self.ir_size]) * self.zoom
+        # Draw nothing if there is no bitmap.
+        if self.bitmap is None:
+            return
+
+        # Compute the scale and offset to use for points and lines.
+        scale = np.array([self.image.width / self.ir_size,
+                          self.image.height / self.ir_size]) * self.zoom
         offset = self.offset
+        # This correction is here to deal with some difference between the
+        # GC scaling vs the manual scaling with the points / lines and the DC.
+        # It seems to need to change based on the zoom level to line up perfectly.
+        offset_correction = np.array([1.5, 1.5]) * (self.zoom / 2.0)
 
         if self.show_image:
+            # Draw the bitmap with a GC so it can be scaled easily.
             gc = wx.GraphicsContext.Create(dc)
             gc.PushState()
             gc.Translate(*offset)
@@ -193,12 +204,14 @@ class ogcImageEditorViewer(wx.Panel):
             gc.PopState()
 
         if self.show_lines and self.ir_edges.lines:
+            # Draw lines and points with a DC so we can pass lists.
             lines_array = np.array(self.ir_edges.lines)
-            scaled_lines = lines_array * scale + offset
-            lines = scaled_lines.reshape(-1, 4).astype(int).tolist()
+            scaled_lines = lines_array * scale + offset + offset_correction
+            lines = np.round(scaled_lines.reshape(-1, 4)).astype(int).tolist()
             dc.SetPen(wx.Pen((0, 255, 0)))
             dc.DrawLineList(lines)
-            base_points = scaled_lines.reshape(-1, 2).astype(int)
+            # Expand the points so they're more visible.
+            base_points = np.round(scaled_lines.reshape(-1, 2)).astype(int)
             offsets = np.array([[-1, -1], [0, -1], [1, -1],
                                 [-1,  0], [0,  0], [1,  0],
                                 [-1,  1], [0,  1], [1,  1]])
@@ -307,9 +320,9 @@ class ogcImageEditorController(wx.Panel):
         box_content.Add(self.show_image_checkbox, 0, wx.LEFT | wx.TOP, 2)
         box_content.Add(self.show_lines_checkbox, 0, wx.LEFT | wx.TOP | wx.BOTTOM, 2)
 
-        content.SetSizer(box_content)
+        content.SetSizerAndFit(box_content)
         box_main.Add(content, 1, wx.EXPAND)
-        self.SetSizer(box_main)
+        self.SetSizerAndFit(box_main)
 
         # Bind events.
         self.ir_size_ctrl.Bind(wx.EVT_CHOICE, self.OnIRSize)
@@ -377,6 +390,7 @@ class ogcImageEditorPanel(wx.Panel):
         # Initialize the panel with border and character input support.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(ogcImageEditorPanel, self).__init__(parent, style=style)
+        self.SetMinSize((640, 480))
         # Set the image and panel background color.
         self.image = image
         self.SetBackgroundColour((0, 0, 0))

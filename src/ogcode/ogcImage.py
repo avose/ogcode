@@ -75,7 +75,8 @@ def simplify_lines(
     canvas = np.zeros((height, width), dtype=bool)
     lines_array = np.stack(lines)
     norm_points = (lines_array - min_xy) / span
-    scaled_points = (norm_points * np.array([width - 1, height - 1])).astype(int)
+    #scaled_points = (norm_points * np.array([width - 1, height - 1])).astype(int)
+    scaled_points = ((norm_points * [width, height]) - 0.5).astype(int)
 
     diffs = scaled_points[:, 1] - scaled_points[:, 0]
     lengths = np.linalg.norm(diffs, axis=1)
@@ -101,15 +102,15 @@ def simplify_lines(
                     last_pixel = (x, y)
                 else:
                     if start_pixel is not None and last_pixel is not None:
-                        p_start = (np.array(start_pixel) / [width, height]) * [orig_width, orig_height]
-                        p_end = (np.array(last_pixel) / [width, height]) * [orig_width, orig_height]
+                        p_start = ((np.array(start_pixel) + 0.5) / [width, height]) * [orig_width, orig_height]
+                        p_end = ((np.array(last_pixel) + 0.5) / [width, height]) * [orig_width, orig_height]
                         kept_segments.append(np.array([p_start, p_end]))
                         start_pixel = None
                         last_pixel = None
 
         if start_pixel is not None and last_pixel is not None:
-            p_start = (np.array(start_pixel) / [width, height]) * [orig_width, orig_height]
-            p_end = (np.array(last_pixel) / [width, height]) * [orig_width, orig_height]
+            p_start = ((np.array(start_pixel) + 0.5) / [width, height]) * [orig_width, orig_height]
+            p_end = ((np.array(last_pixel) + 0.5) / [width, height]) * [orig_width, orig_height]
             kept_segments.append(np.array([p_start, p_end]))
 
     # Convert boolean canvas to uint8 RGB image for visualization.
