@@ -23,6 +23,7 @@ ThresholdEvent, EVT_THRESHOLD = wx.lib.newevent.NewEvent()
 ShowImageEvent, EVT_SHOW_IMAGE = wx.lib.newevent.NewEvent()
 ShowLinesEvent, EVT_SHOW_LINES = wx.lib.newevent.NewEvent()
 IRSizeEvent, EVT_IR_SIZE = wx.lib.newevent.NewEvent()
+LaserPowerEvent, EVT_LASER_POWER = wx.lib.newevent.NewEvent()
 GCodeEvent, EVT_GCODE = wx.lib.newevent.NewEvent()
 
 ################################################################################################
@@ -34,7 +35,8 @@ class ogcImageEditorViewer(wx.Panel):
         super().__init__(parent, style=style)
         self.SetMinSize((640, 480))
         self.gcode = None
-        self.orig_image = ogcImage(image)
+        self.laser_power = 16
+        self.orig_image = ogcImage(image).Cleanup()
         self.ir_size = 1024
         self.ir_image = ogcImage(self.orig_image, width=self.ir_size, height=self.ir_size)
         self.canny_min = 100
@@ -63,10 +65,11 @@ class ogcImageEditorViewer(wx.Panel):
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
         self.Bind(wx.EVT_MOTION, self.OnMouseMove)
-        self.Bind(EVT_THRESHOLD, self.OnThresholdChange)
-        self.Bind(EVT_IR_SIZE, self.OnIRSizeChange)
-        self.Bind(EVT_SHOW_IMAGE, self.OnShowImageChange)
-        self.Bind(EVT_SHOW_LINES, self.OnShowLinesChange)
+        self.Bind(EVT_THRESHOLD, self.OnThreshold)
+        self.Bind(EVT_IR_SIZE, self.OnIRSize)
+        self.Bind(EVT_SHOW_IMAGE, self.OnShowImage)
+        self.Bind(EVT_SHOW_LINES, self.OnShowLines)
+        self.Bind(EVT_LASER_POWER, self.OnLaserPower)
 
         wx.CallAfter(self.OnSize)
         return
@@ -111,6 +114,7 @@ class ogcImageEditorViewer(wx.Panel):
     def ProcessImage(self):
         # Resize image and regenerate bitmap.
         self.image = ogcImage(self.ir_image)
+        #self.image = ogcImage(self.ir_edges)
         dims = (self.Size[0], None) if self.Size[0] < self.Size[1] else (None, self.Size[1])
         self.image.Resize(*dims)
         self.bitmap = wx.Bitmap(self.image.WXImage())
@@ -125,12 +129,12 @@ class ogcImageEditorViewer(wx.Panel):
             self.recenter_on_next_render = False
 
         # Update G-Code and post the event.
-        self.gcode = gcScript(lines=self.ir_edges.lines)
+        self.gcode = gcScript(lines=self.ir_edges.lines, laser_power=self.laser_power)
         gcode_event = GCodeEvent(value=self.gcode)
         wx.PostEvent(self.Parent, gcode_event)
         return
 
-    def OnIRSizeChange(self, event):
+    def OnIRSize(self, event):
         # Update intermediate image resolution and edge detection.
         self.dirty = True
         self.recenter_on_next_render = True
@@ -139,7 +143,7 @@ class ogcImageEditorViewer(wx.Panel):
         self.ir_edges = ogcImage(self.ir_image).Edges(self.canny_min, self.canny_max)
         return
 
-    def OnThresholdChange(self, event):
+    def OnThreshold(self, event):
         # Update edge detection thresholds.
         self.dirty = True
         self.canny_min = event.min_value
@@ -147,18 +151,25 @@ class ogcImageEditorViewer(wx.Panel):
         self.ir_edges = ogcImage(self.ir_image).Edges(self.canny_min, self.canny_max)
         return
 
-    def OnShowImageChange(self, event):
+    def OnShowImage(self, event):
         # Toggle image visibility.
         if self.show_image != event.value:
             self.dirty = True
             self.show_image = event.value
         return
 
-    def OnShowLinesChange(self, event):
+    def OnShowLines(self, event):
         # Toggle line overlay visibility.
         if self.show_lines != event.value:
             self.dirty = True
             self.show_lines = event.value
+        return
+
+    def OnLaserPower(self, event):
+        # Toggle line overlay visibility.
+        if self.laser_power != event.value:
+            self.dirty = True
+            self.laser_power = event.value
         return
 
     def Draw(self, dc):
@@ -184,13 +195,15 @@ class ogcImageEditorViewer(wx.Panel):
         if self.show_lines and self.ir_edges.lines:
             lines_array = np.array(self.ir_edges.lines)
             scaled_lines = lines_array * scale + offset
-
             lines = scaled_lines.reshape(-1, 4).astype(int).tolist()
-            points = scaled_lines.reshape(-1, 2).astype(int).tolist()
-
             dc.SetPen(wx.Pen((0, 255, 0)))
             dc.DrawLineList(lines)
-
+            base_points = scaled_lines.reshape(-1, 2).astype(int)
+            offsets = np.array([[-1, -1], [0, -1], [1, -1],
+                                [-1,  0], [0,  0], [1,  0],
+                                [-1,  1], [0,  1], [1,  1]])
+            expanded_points = (base_points[:, None, :] + offsets).reshape(-1, 2)
+            points = expanded_points.tolist()
             dc.SetPen(wx.Pen((255, 0, 0)))
             dc.DrawPointList(points)
 
@@ -266,6 +279,16 @@ class ogcImageEditorController(wx.Panel):
         box_max_slider.Add(self.threshold_max_slider, 1, wx.EXPAND | wx.RIGHT, 1)
         box_max_slider.Add(self.threshold_max_value, 0, wx.ALIGN_CENTER_VERTICAL)
 
+        # Laser power slider.
+        laser_power_label = wx.StaticText(content, label="Laser Power:")
+        self.laser_power_slider = wx.Slider(content, minValue=0, maxValue=255, style=wx.SL_HORIZONTAL)
+        self.laser_power_slider.SetValue(16)
+        self.laser_power_value = wx.StaticText(content, label="16", size=(30, -1))
+
+        box_laser_slider = wx.BoxSizer(wx.HORIZONTAL)
+        box_laser_slider.Add(self.laser_power_slider, 1, wx.EXPAND | wx.RIGHT, 1)
+        box_laser_slider.Add(self.laser_power_value, 0, wx.ALIGN_CENTER_VERTICAL)
+
         # Checkboxes.
         self.show_image_checkbox = wx.CheckBox(content, label="Show Image")
         self.show_lines_checkbox = wx.CheckBox(content, label="Show Lines")
@@ -278,7 +301,9 @@ class ogcImageEditorController(wx.Panel):
         box_content.Add(threshold_min_label, 0, wx.LEFT | wx.TOP, 2)
         box_content.Add(box_min_slider, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 2)
         box_content.Add(threshold_max_label, 0, wx.LEFT | wx.TOP, 0)
-        box_content.Add(box_max_slider, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 1)
+        box_content.Add(box_max_slider, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 2)
+        box_content.Add(laser_power_label, 0, wx.LEFT | wx.TOP, 2)
+        box_content.Add(box_laser_slider, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 1)
         box_content.Add(self.show_image_checkbox, 0, wx.LEFT | wx.TOP, 2)
         box_content.Add(self.show_lines_checkbox, 0, wx.LEFT | wx.TOP | wx.BOTTOM, 2)
 
@@ -287,16 +312,17 @@ class ogcImageEditorController(wx.Panel):
         self.SetSizer(box_main)
 
         # Bind events.
-        self.ir_size_ctrl.Bind(wx.EVT_CHOICE, self.OnIRSizeChange)
-        self.threshold_min_slider.Bind(wx.EVT_SLIDER, self.OnThresholdChange)
-        self.threshold_max_slider.Bind(wx.EVT_SLIDER, self.OnThresholdChange)
-        self.show_image_checkbox.Bind(wx.EVT_CHECKBOX, self.OnShowImageChange)
-        self.show_lines_checkbox.Bind(wx.EVT_CHECKBOX, self.OnShowLinesChange)
+        self.ir_size_ctrl.Bind(wx.EVT_CHOICE, self.OnIRSize)
+        self.threshold_min_slider.Bind(wx.EVT_SLIDER, self.OnThreshold)
+        self.threshold_max_slider.Bind(wx.EVT_SLIDER, self.OnThreshold)
+        self.laser_power_slider.Bind(wx.EVT_SLIDER, self.OnLaserPower)
+        self.show_image_checkbox.Bind(wx.EVT_CHECKBOX, self.OnShowImage)
+        self.show_lines_checkbox.Bind(wx.EVT_CHECKBOX, self.OnShowLines)
 
         self.Show(True)
         return
 
-    def OnIRSizeChange(self, event):
+    def OnIRSize(self, event):
         # Notify parent that IR size is changed.
         selection = self.ir_size_ctrl.GetStringSelection()
         ir_size_value = self.ir_size_values.get(selection, 1024)
@@ -304,7 +330,7 @@ class ogcImageEditorController(wx.Panel):
         wx.PostEvent(self.Parent, ir_size_event)
         return
 
-    def OnThresholdChange(self, event):
+    def OnThreshold(self, event):
         # Update min and max threshold values, ensuring min < max.
         min_value = self.threshold_min_slider.GetValue()
         max_value = self.threshold_max_slider.GetValue()
@@ -321,14 +347,22 @@ class ogcImageEditorController(wx.Panel):
         wx.PostEvent(self.Parent, threshold_event)
         return
 
-    def OnShowImageChange(self, event):
+    def OnLaserPower(self, event):
+        # Notify parent when laser power slider is adjusted.
+        power_value = self.laser_power_slider.GetValue()
+        self.laser_power_value.SetLabel(str(power_value))
+        power_event = LaserPowerEvent(value=power_value)
+        wx.PostEvent(self.Parent, power_event)
+        return
+
+    def OnShowImage(self, event):
         # Notify parent when show image checkbox is toggled.
         show_image_value = self.show_image_checkbox.GetValue()
         show_image_event = ShowImageEvent(value=show_image_value)
         wx.PostEvent(self.Parent, show_image_event)
         return
 
-    def OnShowLinesChange(self, event):
+    def OnShowLines(self, event):
         # Notify parent when show lines checkbox is toggled.
         show_lines_value = self.show_lines_checkbox.GetValue()
         show_lines_event = ShowLinesEvent(value=show_lines_value)
@@ -362,6 +396,7 @@ class ogcImageEditorPanel(wx.Panel):
         self.Bind(EVT_IR_SIZE, self.OnIRSize)
         self.Bind(EVT_SHOW_IMAGE, self.OnShowImage)
         self.Bind(EVT_SHOW_LINES, self.OnShowLines)
+        self.Bind(EVT_LASER_POWER, self.OnLaserPower)
         self.Bind(EVT_GCODE, self.OnGCode)
         # Display the panel.
         self.Show(True)
@@ -389,6 +424,12 @@ class ogcImageEditorPanel(wx.Panel):
         # Forward show lines event to the viewer.
         show_lines_event = ShowLinesEvent(value=event.value)
         wx.PostEvent(self.viewer, show_lines_event)
+        return
+
+    def OnLaserPower(self, event):
+        # Forward laser power event to the viewer.
+        laser_power_event = LaserPowerEvent(value=event.value)
+        wx.PostEvent(self.viewer, laser_power_event)
         return
 
     def OnGCode(self, event):

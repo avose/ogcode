@@ -10,14 +10,14 @@ This file holds image modification utilities.
 import wx
 import cv2
 import numpy as np
-from typing import List
+from typing import List, Tuple
 
 from .ogcSettings import ogcSettings
 
 ################################################################################################
 
 def contours_to_lines(contours: List[np.ndarray]) -> List[np.ndarray]:
-    # Convert contours into individual line segments including closing edge using np.roll
+    # Convert contours into individual line segments including closing edge.
     lines = []
     for contour in contours:
         if len(contour) < 2:
@@ -29,26 +29,95 @@ def contours_to_lines(contours: List[np.ndarray]) -> List[np.ndarray]:
     return lines
 
 
-def simplify_lines(lines: List[np.ndarray], min_length: float = 0.5) -> List[np.ndarray]:
-    # Simplify the list of lines by removing short or nearly overlapping segments
-    simplified = []
-    seen = []
+def bresenham_line(p0, p1):
+    # Bresenham's line algorithm for integer pixel coordinates.
+    x0, y0 = p0
+    x1, y1 = p1
+    points = []
+    dx = abs(x1 - x0)
+    dy = abs(y1 - y0)
+    sx = 1 if x0 < x1 else -1
+    sy = 1 if y0 < y1 else -1
+    err = dx - dy
+    while True:
+        points.append((x0, y0))
+        if x0 == x1 and y0 == y1:
+            break
+        e2 = 2 * err
+        if e2 > -dy:
+            err -= dy
+            x0 += sx
+        if e2 < dx:
+            err += dx
+            y0 += sy
+    return points
 
-    for line in lines:
-        p1, p2 = line
-        length = np.linalg.norm(p2 - p1)
-        if length < min_length:
-            continue
 
-        # Normalize direction vector and sort endpoints
-        direction = (p2 - p1) / length
-        key = tuple(sorted([tuple(p1.round(3)), tuple(p2.round(3))]))
+def simplify_lines(
+        lines: List[np.ndarray],
+        edges: np.ndarray,
+        scale: float = 0.5
+) -> Tuple[List[np.ndarray], np.ndarray]:
+    # Simplify lines by rasterizing them onto a low-resolution canvas and
+    # extracting only contributing segments.
+    if not lines:
+        return [], edges
 
-        if key not in seen:
-            simplified.append(line)
-            seen.append(key)
+    orig_height, orig_width = edges.shape[:2]
+    width = int(orig_width * scale)
+    height = int(orig_height * scale)
 
-    return simplified
+    height, width = edges.shape[:2]
+    min_xy = np.array([0.0, 0.0])
+    max_xy = np.array([width, height], dtype=float)
+    span = max_xy - min_xy
+
+    canvas = np.zeros((height, width), dtype=bool)
+    lines_array = np.stack(lines)
+    norm_points = (lines_array - min_xy) / span
+    scaled_points = (norm_points * np.array([width - 1, height - 1])).astype(int)
+
+    diffs = scaled_points[:, 1] - scaled_points[:, 0]
+    lengths = np.linalg.norm(diffs, axis=1)
+    sort_indices = np.argsort(-lengths)
+    sorted_scaled = scaled_points[sort_indices]
+    sorted_original = lines_array[sort_indices]
+
+    kept_segments = []
+
+    for i in range(sorted_scaled.shape[0]):
+        p1_canvas, p2_canvas = sorted_scaled[i]
+        line_pixels = bresenham_line(tuple(p1_canvas), tuple(p2_canvas))
+
+        start_pixel = None
+        last_pixel = None
+
+        for x, y in line_pixels:
+            if 0 <= y < height and 0 <= x < width:
+                if not canvas[y, x]:
+                    canvas[y, x] = True
+                    if start_pixel is None:
+                        start_pixel = (x, y)
+                    last_pixel = (x, y)
+                else:
+                    if start_pixel is not None and last_pixel is not None:
+                        p_start = (np.array(start_pixel) / [width, height]) * [orig_width, orig_height]
+                        p_end = (np.array(last_pixel) / [width, height]) * [orig_width, orig_height]
+                        kept_segments.append(np.array([p_start, p_end]))
+                        start_pixel = None
+                        last_pixel = None
+
+        if start_pixel is not None and last_pixel is not None:
+            p_start = (np.array(start_pixel) / [width, height]) * [orig_width, orig_height]
+            p_end = (np.array(last_pixel) / [width, height]) * [orig_width, orig_height]
+            kept_segments.append(np.array([p_start, p_end]))
+
+    # Convert boolean canvas to uint8 RGB image for visualization.
+    canvas_image = (canvas.astype(np.uint8) * 255)
+    edges_rgb = cv2.cvtColor(canvas_image, cv2.COLOR_GRAY2RGB)
+    edges_resized = cv2.resize(edges_rgb, (orig_width, orig_height), interpolation=cv2.INTER_NEAREST)
+
+    return kept_segments, edges_resized
 
 ################################################################################################
 
@@ -130,20 +199,43 @@ class ogcImage():
         return np.copy(self.cv_image)
 
     ################################################################
+    # Replace image contents with cleaned image (w.r.t edges)
+    def Cleanup(self, scale: float = 0.95) -> np.ndarray:
+        # Create a padded version of the image by shrinking and
+        # centering it to reduce edge artifacts.
+        original_height, original_width = self.cv_image.shape[:2]
+        new_width = int(original_width * scale)
+        new_height = int(original_height * scale)
+        resized = cv2.resize(self.cv_image, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
+        # Use the first pixel color as the background fill color.
+        bg_color = self.cv_image[0, 0].tolist()
+        padded = np.full_like(self.cv_image, bg_color, dtype=np.uint8)
+        x_offset = (original_width - new_width) // 2
+        y_offset = (original_height - new_height) // 2
+        padded[y_offset:y_offset + new_height, x_offset:x_offset + new_width] = resized
+        self.cv_image = padded
+        return self
+
+    ################################################################
     # Replace image contents with image edges and return self.
     def Edges(self, threshold_min: int = 100, threshold_max: int = 200):
         # Convert to grayscale.
         grayscale = cv2.cvtColor(self.cv_image, cv2.COLOR_RGB2GRAY)
         # Extract edges.
         edges = cv2.Canny(grayscale, threshold_min, threshold_max)
+        edges_rgb = cv2.cvtColor(edges, cv2.COLOR_GRAY2RGB)
         # Find contours.
         contours = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         contours = contours[0]
         contours = [ c.reshape( (c.shape[0], 2) ) for c in contours ]
+        # Convert contours to lines.
         self.lines = contours_to_lines(contours)
-        self.lines = simplify_lines(self.lines, min_length=0.0)
-        # Convert back to RGB.
-        edges_rgb = cv2.cvtColor(edges, cv2.COLOR_GRAY2RGB)
+        self.lines, edges_rgb = simplify_lines(
+            self.lines,
+            edges,
+            scale=1
+        )
+        # Save image of edges.
         self.cv_image = edges_rgb
         return self
 
@@ -183,6 +275,7 @@ class ogcImage():
     # Replace image with image contents centered in new image and return self.
     def ResizeCanvas(self, width, height, x = 0, y = 0, center = True, interp = cv2.INTER_CUBIC):
         # Collect scaling parameters.
+        bg_color = tuple(int(c) for c in self.cv_image[0, 0])
         (oh, ow) = self.cv_image.shape[:2]
         if width - ow >= 0 and height - oh >= 0:
             # Both dims of original are smaller than new canvas size.
@@ -216,6 +309,7 @@ class ogcImage():
 
         # Create new image with new canvas size.
         self.cv_image = np.zeros((height, width, 3), dtype=np.uint8)
+        self.cv_image[:] = bg_color
 
         # Compute offsets of original image in new canvas.
         if center:
