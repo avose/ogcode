@@ -120,67 +120,76 @@ class gcScript():
     def __init__(self,
                  commands: Optional[List[gcCommand]] = None,
                  text: Optional[str] = None,
-                 lines: Optional[List[np.ndarray]] = None,
+                 lines: Optional[np.ndarray] = None,
                  laser_power: float = 16.0):
         # Construct G-Code script from one of: command list, raw text, or line segments.
         if sum([commands is not None, text is not None, lines is not None]) != 1:
             raise ValueError("ERROR: Provide exactly one of commands, text, or lines.")
-
         if commands is not None:
-            # Use provided list of gcCommand objects.
-            if (not isinstance(commands, list) or len(commands) == 0 or
-                not isinstance(commands[0], gcCommand)):
-                raise ValueError("ERROR: 'commands' must be non-empty list of gcCommand.")
-            self.commands = commands
-
+            self._init_from_commands(commands)
         elif text is not None:
-            # Parse raw G-code text into commands.
-            if not isinstance(text, str):
-                raise ValueError("ERROR: 'text' must be a string.")
-            commands = []
-            for ndx, line in enumerate(text.splitlines()):
-                try:
-                    commands.append(gcCommand(text=line))
-                except:
-                    raise ValueError(f"ERROR: Failed to create G-Code command from line {ndx}: '{line}'")
-            if len(commands) == 0:
-                raise ValueError(f"ERROR: No G-Code commands found in: '{text}'")
-            self.commands = commands
-
+            self._init_from_text(text)
         elif lines is not None:
-            # Convert list of line segments into G-Code commands.
-            if (not isinstance(lines, list) or
-                not all(isinstance(line, np.ndarray) and line.shape == (2, 2) for line in lines)):
-                raise ValueError("ERROR: 'lines' must be a list of numpy arrays with shape (2, 2).")
-            self.commands = [
-                # Absolute positioning.
-                gcCommand([gcParam('G', 90)]),
-                # Units in mm.
-                gcCommand([gcParam('G', 21)]),
-                # XY plane, path blending.
-                gcCommand([gcParam('G', 17), gcParam('G', 64), gcParam('P', 0.001)]),
-                # Laser on.
-                gcCommand([gcParam('M', 3), gcParam('S', laser_power)]),
-                # Feed rate.
-                gcCommand([gcParam('F', 2.00)])
-            ]
-            last_end = None
-            for line in lines:
-                x0, y0 = line[0]
-                x1, y1 = line[1]
-                if last_end is None or np.linalg.norm(line[0] - last_end) > 1.0:
-                    # Lift and reposition if far from previous line.
-                    self.commands.append(gcCommand([gcParam('G', 0), gcParam('Z', 0.25)]))
-                    self.commands.append(gcCommand([gcParam('G', 0), gcParam('X', x0), gcParam('Y', y0)]))
-                    self.commands.append(gcCommand([gcParam('G', 1), gcParam('Z', -0.005)]))
-                self.commands.append(gcCommand([gcParam('G', 1), gcParam('X', x1), gcParam('Y', y1)]))
-                last_end = line[1]
-            # Final lift.
-            self.commands.append(gcCommand([gcParam('G', 0), gcParam('Z', 0.25)]))
-            # Laser off.
-            self.commands.append(gcCommand([gcParam('M', 5)]))
-            # End program.
-            self.commands.append(gcCommand([gcParam('M', 2)]))
+            self._init_from_lines(lines, laser_power)
+        self.bounds = self._bounds()
+        return
+
+    def _init_from_commands(self, commands: List[gcCommand]):
+        # Use provided list of gcCommand objects.
+        if (not isinstance(commands, list) or len(commands) == 0 or
+            not isinstance(commands[0], gcCommand)):
+            raise ValueError("ERROR: 'commands' must be non-empty list of gcCommand.")
+        self.commands = commands
+        return
+
+    def _init_from_text(self, text: str):
+        # Parse raw G-code text into commands.
+        if not isinstance(text, str):
+            raise ValueError("ERROR: 'text' must be a string.")
+        commands = []
+        for ndx, line in enumerate(text.splitlines()):
+            try:
+                commands.append(gcCommand(text=line))
+            except:
+                raise ValueError(f"ERROR: Failed to create G-Code command from line {ndx}: '{line}'")
+        if len(commands) == 0:
+            raise ValueError(f"ERROR: No G-Code commands found in: '{text}'")
+        self.commands = commands
+        return
+
+    def _init_from_lines(self, lines: np.ndarray, laser_power: float):
+        # Convert numpy array of line segments into G-Code commands.
+        if not isinstance(lines, np.ndarray) or lines.ndim != 3 or lines.shape[1:] != (2, 2):
+            raise ValueError("ERROR: 'lines' must be a numpy array with shape (N, 2, 2).")
+        self.commands = [
+            # Absolute positioning.
+            gcCommand([gcParam('G', 90)]),
+            # Units in mm.
+            gcCommand([gcParam('G', 21)]),
+            # XY plane, path blending.
+            gcCommand([gcParam('G', 17), gcParam('G', 64), gcParam('P', 0.001)]),
+            # Laser on.
+            gcCommand([gcParam('M', 3), gcParam('S', laser_power)]),
+            # Feed rate.
+            gcCommand([gcParam('F', 2.00)])
+        ]
+        last_end = None
+        for line in lines:
+            x0, y0 = line[0]
+            x1, y1 = line[1]
+            if last_end is None or np.linalg.norm(line[0] - last_end) > 1.0:
+                # Lift and reposition if far from previous line.
+                self.commands.append(gcCommand([gcParam('G', 0), gcParam('Z', 0.25)]))
+                self.commands.append(gcCommand([gcParam('G', 0), gcParam('X', x0), gcParam('Y', y0)]))
+                self.commands.append(gcCommand([gcParam('G', 1), gcParam('Z', -0.005)]))
+            self.commands.append(gcCommand([gcParam('G', 1), gcParam('X', x1), gcParam('Y', y1)]))
+            last_end = line[1]
+        # Final lift.
+        self.commands.append(gcCommand([gcParam('G', 0), gcParam('Z', 0.25)]))
+        # Laser off.
+        self.commands.append(gcCommand([gcParam('M', 5)]))
+        # End program.
+        self.commands.append(gcCommand([gcParam('M', 2)]))
         return
 
     ################################################################
@@ -189,8 +198,11 @@ class gcScript():
         return "\n".join([str(command) for command in self.commands])
 
     ################################################################
-    def to_lines(self) -> List[np.ndarray]:
-        # Convert G-code motion into drawable line segments, using only laser-on movement.
+    def to_lines(self) -> np.ndarray:
+        # Convert G-code motion into drawable line segments.
+        # Only movements with laser-on (Z < 0) are considered.
+        # Returns a single numpy array of lines with shape (N, 2, 2).
+
         lines = []
         current_pos = None
         z_value = None
@@ -199,6 +211,7 @@ class gcScript():
             if command.code.name != 'G':
                 continue
 
+            # Extract position parameters if available.
             x = y = z = None
             for arg in command.args:
                 if arg.name == 'X':
@@ -211,6 +224,7 @@ class gcScript():
             if z is not None:
                 z_value = z
 
+            # Compute next position based on X/Y values.
             if x is not None or y is not None:
                 next_pos = None
                 if current_pos is not None:
@@ -226,7 +240,9 @@ class gcScript():
                         lines.append(np.array([current_pos, next_pos]))
                     current_pos = next_pos
 
-        return lines
+        if lines:
+            return np.stack(lines)
+        return np.empty((0, 2, 2), dtype=float)
 
     ################################################################
     def get_laser_power(self, default: int = 16) -> int:
@@ -239,7 +255,7 @@ class gcScript():
         return default
 
     ################################################################
-    def bounds(self):
+    def _bounds(self):
         # Compute bounding box of G-code motion.
         x_valid, y_valid = False, False
         x_min, x_max = self._coord_max, self._coord_min

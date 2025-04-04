@@ -16,8 +16,9 @@ from .ogcSettings import ogcSettings
 
 ################################################################################################
 
-def contours_to_lines(contours: List[np.ndarray]) -> List[np.ndarray]:
-    # Convert contours into individual line segments including closing edge.
+################################################################
+def contours_to_lines(contours: List[np.ndarray]) -> np.ndarray:
+    # Convert contours into a single numpy array of line segments, including closing edges.
     lines = []
     for contour in contours:
         if len(contour) < 2:
@@ -25,10 +26,14 @@ def contours_to_lines(contours: List[np.ndarray]) -> List[np.ndarray]:
         start_points = contour
         end_points = np.roll(contour, -1, axis=0)
         segment_pairs = np.stack([start_points, end_points], axis=1)
-        lines.extend(segment_pairs)
-    return lines
+        lines.append(segment_pairs)
 
+    if len(lines) > 0:
+        return np.concatenate(lines, axis=0)
+    else:
+        return np.empty((0, 2, 2), dtype=float)
 
+################################################################
 def bresenham_line(p0, p1):
     # Bresenham's line algorithm for integer pixel coordinates.
     x0, y0 = p0
@@ -52,37 +57,34 @@ def bresenham_line(p0, p1):
             y0 += sy
     return points
 
-
+################################################################
 def simplify_lines(
-        lines: List[np.ndarray],
+        lines: np.ndarray,
         edges: np.ndarray,
         scale: float = 0.5
-) -> Tuple[List[np.ndarray], np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray]:
     # Simplify lines by rasterizing them onto a low-resolution canvas and
-    # extracting only contributing segments.
-    if not lines:
-        return [], edges
+    # extracting only contributing segments. Returns a numpy array of lines.
+    if lines.shape[0] == 0:
+        return np.empty((0, 2, 2), dtype=float), edges
 
     orig_height, orig_width = edges.shape[:2]
     width = int(orig_width * scale)
     height = int(orig_height * scale)
 
-    height, width = edges.shape[:2]
     min_xy = np.array([0.0, 0.0])
     max_xy = np.array([width, height], dtype=float)
     span = max_xy - min_xy
 
     canvas = np.zeros((height, width), dtype=bool)
-    lines_array = np.stack(lines)
-    norm_points = (lines_array - min_xy) / span
-    #scaled_points = (norm_points * np.array([width - 1, height - 1])).astype(int)
+    norm_points = (lines - min_xy) / span
     scaled_points = ((norm_points * [width, height]) - 0.5).astype(int)
 
     diffs = scaled_points[:, 1] - scaled_points[:, 0]
     lengths = np.linalg.norm(diffs, axis=1)
     sort_indices = np.argsort(-lengths)
     sorted_scaled = scaled_points[sort_indices]
-    sorted_original = lines_array[sort_indices]
+    sorted_original = lines[sort_indices]
 
     kept_segments = []
 
@@ -104,21 +106,21 @@ def simplify_lines(
                     if start_pixel is not None and last_pixel is not None:
                         p_start = ((np.array(start_pixel) + 0.5) / [width, height]) * [orig_width, orig_height]
                         p_end = ((np.array(last_pixel) + 0.5) / [width, height]) * [orig_width, orig_height]
-                        kept_segments.append(np.array([p_start, p_end]))
+                        kept_segments.append([p_start, p_end])
                         start_pixel = None
                         last_pixel = None
 
         if start_pixel is not None and last_pixel is not None:
             p_start = ((np.array(start_pixel) + 0.5) / [width, height]) * [orig_width, orig_height]
             p_end = ((np.array(last_pixel) + 0.5) / [width, height]) * [orig_width, orig_height]
-            kept_segments.append(np.array([p_start, p_end]))
+            kept_segments.append([p_start, p_end])
 
     # Convert boolean canvas to uint8 RGB image for visualization.
     canvas_image = (canvas.astype(np.uint8) * 255)
     edges_rgb = cv2.cvtColor(canvas_image, cv2.COLOR_GRAY2RGB)
     edges_resized = cv2.resize(edges_rgb, (orig_width, orig_height), interpolation=cv2.INTER_NEAREST)
 
-    return kept_segments, edges_resized
+    return np.array(kept_segments), edges_resized
 
 ################################################################################################
 

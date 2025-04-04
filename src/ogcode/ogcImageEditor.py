@@ -9,6 +9,8 @@ This file holds the code for the image editor.
 
 import wx
 import numpy as np
+from time import sleep
+from threading import Thread, Lock
 
 from .ogcIcons import ogcIcons
 from .ogcEvents import ogcEvents
@@ -113,7 +115,9 @@ class ogcImageEditorViewer(wx.Panel):
         # End dragging.
         if self.HasCapture():
             self.ReleaseMouse()
-        self.drag_start = None
+        if self.drag_start is not None:
+            self.drag_start = None
+            self.dirty = True
         return
 
     def OnMouseMove(self, event):
@@ -226,7 +230,7 @@ class ogcImageEditorViewer(wx.Panel):
             offset = self.offset + offset_correction
         elif self.mode == ViewerMode.GCODE:
             # Compute scaling and offset from G-Code if in G-Code mode.
-            gcode_tl, gcode_br = self.gcode.bounds()
+            gcode_tl, gcode_br = self.gcode.bounds
             gcode_w = gcode_br[0] - gcode_tl[0]
             gcode_h = gcode_br[1] - gcode_tl[1]
             # Avoid division by zero.
@@ -241,20 +245,25 @@ class ogcImageEditorViewer(wx.Panel):
             # Offset from G-code origin and pan
             offset = self.offset - (np.array(gcode_tl) * scale)
 
-        if self.show_lines and self.lines:
+        if self.show_lines and self.lines.size > 0:
             # Draw lines and points with a DC so we can pass lists.
-            lines_array = np.array(self.lines)
-            scaled_lines = lines_array * scale + offset
+            scaled_lines = self.lines * scale + offset
             lines = np.round(scaled_lines.reshape(-1, 4)).astype(int).tolist()
             dc.SetPen(wx.Pen((0, 255, 0)))
             dc.DrawLineList(lines)
             # Expand the points so they're more visible.
             base_points = np.round(scaled_lines.reshape(-1, 2)).astype(int)
-            offsets = np.array([[-1, -1], [0, -1], [1, -1],
-                                [-1,  0], [0,  0], [1,  0],
-                                [-1,  1], [0,  1], [1,  1]])
-            expanded_points = (base_points[:, None, :] + offsets).reshape(-1, 2)
-            points = expanded_points.tolist()
+            if self.drag_start is None:
+                # Expand points into 3x3 grid only if not actively panning.
+                offsets = np.array([[-1, -1], [0, -1], [1, -1],
+                                    [-1,  0], [0,  0], [1,  0],
+                                    [-1,  1], [0,  1], [1,  1]])
+                expanded_points = (base_points[:, None, :] + offsets).reshape(-1, 2)
+                points = expanded_points.tolist()
+            else:
+                # Just use center points for faster rendering while dragging.
+                points = base_points.tolist()
+            # Draw points.
             dc.SetPen(wx.Pen((255, 0, 0)))
             dc.DrawPointList(points)
 
@@ -297,12 +306,14 @@ class ogcImageEditorController(wx.Panel):
         box_main = wx.BoxSizer(wx.HORIZONTAL)
 
         # Left border.
-        border = wx.Panel(self, size=(2, -1), style=style)
+        border = wx.Panel(self, style=style)
+        border.SetMinSize((2, 1))
         border.SetBackgroundColour(wx.Colour(0, 0, 0))
         box_main.Add(border, 0, wx.EXPAND | wx.RIGHT, 2)
 
         # Main content layout.
         content = wx.Panel(self, style=style)
+        content.SetMinSize((64, 64))
         box_content = wx.BoxSizer(wx.VERTICAL)
 
         # IR size dropdown.
@@ -316,12 +327,14 @@ class ogcImageEditorController(wx.Panel):
         threshold_min_label = wx.StaticText(content, label="Threshold Min:")
         self.threshold_min_slider = wx.Slider(content, minValue=0, maxValue=255, style=wx.SL_HORIZONTAL)
         self.threshold_min_slider.SetValue(100)
-        self.threshold_min_value = wx.StaticText(content, label="100", size=(30, -1))
+        self.threshold_min_value = wx.StaticText(content, label="100")
+        self.threshold_min_value.SetMinSize((30, 1))
 
         threshold_max_label = wx.StaticText(content, label="Threshold Max:")
         self.threshold_max_slider = wx.Slider(content, minValue=0, maxValue=255, style=wx.SL_HORIZONTAL)
         self.threshold_max_slider.SetValue(200)
-        self.threshold_max_value = wx.StaticText(content, label="200", size=(30, -1))
+        self.threshold_max_value = wx.StaticText(content, label="200")
+        self.threshold_max_value.SetMinSize((30, 1))
 
         box_min_slider = wx.BoxSizer(wx.HORIZONTAL)
         box_min_slider.Add(self.threshold_min_slider, 1, wx.EXPAND | wx.RIGHT, 1)
@@ -335,7 +348,8 @@ class ogcImageEditorController(wx.Panel):
         laser_power_label = wx.StaticText(content, label="Laser Power:")
         self.laser_power_slider = wx.Slider(content, minValue=0, maxValue=255, style=wx.SL_HORIZONTAL)
         self.laser_power_slider.SetValue(16)
-        self.laser_power_value = wx.StaticText(content, label="16", size=(30, -1))
+        self.laser_power_value = wx.StaticText(content, label="16")
+        self.laser_power_value.SetMinSize((30, 1))
 
         box_laser_slider = wx.BoxSizer(wx.HORIZONTAL)
         box_laser_slider.Add(self.laser_power_slider, 1, wx.EXPAND | wx.RIGHT, 1)

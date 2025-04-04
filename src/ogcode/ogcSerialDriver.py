@@ -22,7 +22,7 @@ class ogcSerialWriter(Thread):
     Writer will not have more outstanding line writes than parent ogcSerialDriver's set maximum.
     Writer increments parent's outsanding counter, and reader decrements, to track this.
     '''
-    def __init__(self, parent, serial, iota: int = 0.000001):
+    def __init__(self, parent, serial, iota: float = 0.000001):
         Thread.__init__(self)
         self.parent = parent
         self.lock   = self.parent.lock
@@ -73,7 +73,7 @@ class ogcSerialWriter(Thread):
         return
 
     def stop(self):
-        # Step done flag so writer thread will exit.
+        # Set done flag so writer thread will exit.
         if self.parent.debug:
             print("!! serial writer stop")
         self.done = True
@@ -87,7 +87,7 @@ class ogcSerialReader(Thread):
     Writer will not have more outstanding line writes than parent ogcSerialDriver's set maximum.
     Writer increments parent's outsanding counter, and reader decrements, to track this.
     '''
-    def __init__(self, parent, serial, iota: int = 0.000001):
+    def __init__(self, parent, serial, iota: float = 0.000001):
         Thread.__init__(self)
         self.parent = parent
         self.lock   = self.parent.lock
@@ -159,7 +159,7 @@ class ogcSerialReader(Thread):
         return
 
     def stop(self):
-        # Step done flag so reader thread will exit.
+        # Set done flag so reader thread will exit.
         if self.parent.debug:
             print("!! serial reader stop")
         self.done = True

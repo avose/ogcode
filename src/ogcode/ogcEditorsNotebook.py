@@ -24,12 +24,14 @@ class ogcEditorsNotebook(wx.Window):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(ogcEditorsNotebook, self).__init__(parent, style=style)
         self.min_size = [640, 480]
+        self.SetMinSize(self.min_size)
         self.current = False
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.image_list = wx.ImageList(16, 16)
         self.image_list.Add(ogcIcons.Get('page'))
         self.image_list.Add(ogcIcons.Get('error'))
         self.notebook = wx.Notebook(self)
+        self.notebook.SetMinSize(self.min_size)
         self.notebook.SetImageList(self.image_list)
         self.tabs = []
         self.AddPlaceHolder()
