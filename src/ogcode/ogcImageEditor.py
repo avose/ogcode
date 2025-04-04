@@ -26,7 +26,6 @@ ShowImageEvent, EVT_SHOW_IMAGE = wx.lib.newevent.NewEvent()
 ShowLinesEvent, EVT_SHOW_LINES = wx.lib.newevent.NewEvent()
 IRSizeEvent, EVT_IR_SIZE = wx.lib.newevent.NewEvent()
 LaserPowerEvent, EVT_LASER_POWER = wx.lib.newevent.NewEvent()
-GCodeEvent, EVT_GCODE = wx.lib.newevent.NewEvent()
 
 # Viewer modes.
 from enum import Enum
@@ -37,7 +36,7 @@ class ViewerMode(Enum):
 ################################################################################################
 
 class ogcImageEditorViewer(wx.Panel):
-    def __init__(self, parent, data, mode):
+    def __init__(self, parent, data, path, mode):
         # Initialize panel.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super().__init__(parent, style=style)
@@ -45,6 +44,7 @@ class ogcImageEditorViewer(wx.Panel):
         # Initialize data depending on mode.
         self.mode = mode
         self.data = data
+        self.path = path
         if self.mode == ViewerMode.IMAGE:
             self.gcode = None
             self.laser_power = 16
@@ -90,6 +90,11 @@ class ogcImageEditorViewer(wx.Panel):
 
         wx.CallAfter(self.OnSize)
         return
+
+    def GetGCode(self):
+        # Update G-Code.
+        self.gcode = gcScript(lines=self.lines, laser_power=self.laser_power)
+        return self.gcode
 
     def OnMouseWheel(self, event):
         # Zoom in/out centered on the mouse position with multiplicative scaling.
@@ -138,7 +143,6 @@ class ogcImageEditorViewer(wx.Panel):
         dims = (self.Size[0], None) if self.Size[0] < self.Size[1] else (None, self.Size[1])
         self.image.Resize(*dims)
         self.bitmap = wx.Bitmap(self.image.WXImage())
-
         # Center image only if requested.
         if self.recenter_on_next_render:
             self.zoom = 1.0
@@ -147,11 +151,6 @@ class ogcImageEditorViewer(wx.Panel):
                 (self.Size[1] - self.bitmap.GetHeight()) // 2
             ], dtype=float)
             self.recenter_on_next_render = False
-
-        # Update G-Code and post the event.
-        self.gcode = gcScript(lines=self.lines, laser_power=self.laser_power)
-        gcode_event = GCodeEvent(value=self.gcode)
-        wx.PostEvent(self.Parent, gcode_event)
         return
 
     def OnIRSize(self, event):
@@ -247,25 +246,12 @@ class ogcImageEditorViewer(wx.Panel):
 
         if self.show_lines and self.lines.size > 0:
             # Draw lines and points with a DC so we can pass lists.
-            scaled_lines = self.lines * scale + offset
-            lines = np.round(scaled_lines.reshape(-1, 4)).astype(int).tolist()
+            scaled_lines = np.round(self.lines * scale + offset).astype(int)
             dc.SetPen(wx.Pen((0, 255, 0)))
-            dc.DrawLineList(lines)
-            # Expand the points so they're more visible.
-            base_points = np.round(scaled_lines.reshape(-1, 2)).astype(int)
-            if self.drag_start is None:
-                # Expand points into 3x3 grid only if not actively panning.
-                offsets = np.array([[-1, -1], [0, -1], [1, -1],
-                                    [-1,  0], [0,  0], [1,  0],
-                                    [-1,  1], [0,  1], [1,  1]])
-                expanded_points = (base_points[:, None, :] + offsets).reshape(-1, 2)
-                points = expanded_points.tolist()
-            else:
-                # Just use center points for faster rendering while dragging.
-                points = base_points.tolist()
+            dc.DrawLineList(scaled_lines.reshape(-1, 4).tolist())
             # Draw points.
             dc.SetPen(wx.Pen((255, 0, 0)))
-            dc.DrawPointList(points)
+            dc.DrawPointList(scaled_lines.reshape(-1, 2).tolist())
 
         return
 
@@ -282,13 +268,13 @@ class ogcImageEditorViewer(wx.Panel):
         return
 
     def OnIdle(self, event):
-        # Redraw the view if needed.
+        # Reprocess / redraw if needed.
         if self.dirty:
-            self.dirty = False
             if self.mode == ViewerMode.IMAGE:
                 self.ProcessImage()
             self.Refresh()
             self.Update()
+            self.dirty = False
         return
 
 ################################################################################################
@@ -439,7 +425,7 @@ class ogcImageEditorController(wx.Panel):
 
 class ogcImageEditorPanel(wx.Panel):
 
-    def __init__(self, parent, data):
+    def __init__(self, parent, data, path):
         # Initialize the panel with border and character input support.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super(ogcImageEditorPanel, self).__init__(parent, style=style)
@@ -447,13 +433,14 @@ class ogcImageEditorPanel(wx.Panel):
         self.SetBackgroundColour((0, 0, 0))
         # Create an image if passed image data, else use G-Code.
         self.data = data
+        self.path = path
         if isinstance(data, wx.Image):
             self.mode = ViewerMode.IMAGE
         else:
             self.mode = ViewerMode.GCODE
         # Create and set up the main layout (viewer and controller).
         box_main = wx.BoxSizer(wx.HORIZONTAL)
-        self.viewer = ogcImageEditorViewer(self, self.data, self.mode)
+        self.viewer = ogcImageEditorViewer(self, self.data, self.path, self.mode)
         box_main.Add(self.viewer, 1, wx.EXPAND)
         # Create and add the controller panel.
         box_controller = wx.BoxSizer(wx.VERTICAL)
@@ -468,7 +455,6 @@ class ogcImageEditorPanel(wx.Panel):
         self.Bind(EVT_SHOW_IMAGE, self.OnShowImage)
         self.Bind(EVT_SHOW_LINES, self.OnShowLines)
         self.Bind(EVT_LASER_POWER, self.OnLaserPower)
-        self.Bind(EVT_GCODE, self.OnGCode)
         # Display the panel.
         self.Show(True)
         return
@@ -503,13 +489,8 @@ class ogcImageEditorPanel(wx.Panel):
         wx.PostEvent(self.viewer, laser_power_event)
         return
 
-    def OnGCode(self, event):
-        # Save gcode to self.
-        self.gcode = event.value
-        return
-
     def GetGCode(self):
         # Return this editor's gcode.
-        return self.viewer.gcode
+        return self.viewer.GetGCode()
 
 ################################################################################################

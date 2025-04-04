@@ -8,6 +8,7 @@ This file holds the code for the geometry editors notebook.
 ################################################################################################
 
 import wx
+import os
 
 from .ogcIcons import ogcIcons
 from .ogcEvents import ogcEvents
@@ -40,15 +41,12 @@ class ogcEditorsNotebook(wx.Window):
         self.Show(True)
         return
 
-    def NewTab(self, data):
+    def NewTab(self, data, path):
         # Remove placeholder and add a new tab.
         self.RemovePlaceHolder()
-        editor = ogcImageEditorPanel(self.notebook, data)
+        editor = ogcImageEditorPanel(self.notebook, data, path)
         self.tabs.append(editor)
-        if isinstance(data, wx.Image):
-            self.notebook.AddPage(editor, " Image " + str(len(self.tabs)))
-        else:
-            self.notebook.AddPage(editor, " Geometry " + str(len(self.tabs)))
+        self.notebook.AddPage(editor, f" {os.path.basename(path)}")
         self.notebook.ChangeSelection(len(self.tabs)-1)
         self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_EDITOR)
         return editor

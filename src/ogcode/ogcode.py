@@ -115,11 +115,11 @@ class ogcFrame(wx.Frame):
                 if file_dialog.ShowModal() != wx.ID_OK:
                     return
                 # Check if the file is an image file else assume gcode file.
-                file_path = file_dialog.GetPath()
+                file_path = os.path.abspath(file_dialog.GetPath())
                 if wx.Image.CanRead(file_path):
                     # Load the image file and add to new image editor tab.
                     image = wx.Image(file_path, wx.BITMAP_TYPE_ANY)
-                    self.editor.NewTab(image)
+                    self.editor.NewTab(image, file_path)
                 else:
                     # Open G-code file and add to new editor tab.
                     try:
@@ -132,7 +132,7 @@ class ogcFrame(wx.Frame):
                                               style=wx.OK|wx.ICON_ERROR) as dlg:
                             dlg.ShowModal()
                         return
-                    self.editor.NewTab(gcode)
+                    self.editor.NewTab(gcode, file_path)
             return
         elif menu_id == self.ID_SETTINGS:
             # Open settings dialog.

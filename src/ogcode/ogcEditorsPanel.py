@@ -87,9 +87,9 @@ class ogcEditorsPanel(wx.Window):
         print("TODO: Toolbar: Engrave.")
         return
 
-    def NewTab(self, data):
+    def NewTab(self, data, path):
         # Create a new tab with specified data.
-        self.notebook.NewTab(data)
+        self.notebook.NewTab(data, path)
         return
 
     def CurrentTab(self):
