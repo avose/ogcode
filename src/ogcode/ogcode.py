@@ -150,6 +150,8 @@ class ogcFrame(wx.Frame):
             if self.engrave_frame is None:
                 tab = self.editor.CurrentTab()
                 gcode = self.editor.CurrentTab().GetGCode()
+                if gcode is None:
+                    return
                 self.engrave_frame = ogcEngraveFrame(self, gcode)
             else:
                 self.engrave_frame.Raise()
