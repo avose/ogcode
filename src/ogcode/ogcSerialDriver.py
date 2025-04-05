@@ -38,7 +38,10 @@ class ogcSerialWriter(Thread):
         while not self.done and not ready:
             with self.lock:
                 ready = self.parent.reader.ready
-            sleep(1/100.0)
+                if ready == "error":
+                    self.done = True
+            if not ready:
+                sleep(1/100.0)
 
         # Loop until done.
         while not self.done:
@@ -56,7 +59,16 @@ class ogcSerialWriter(Thread):
                     line = self.parent.data[self.index:].split("\n", 1)[0] + "\n"
                     if line:
                         line = line.encode(encoding="utf-8")
-                        self.serial.write(line)
+                        try:
+                            self.serial.write(line)
+                        except:
+                            self.parent.error("Writer Thread: Failed to write line!")
+                            try:
+                                self.serial.write("\nM5\nM2\n".encode(encoding="utf-8"))
+                                self.serial.flush()
+                            except:
+                                pass
+                            break
                         self.index += len(line)
                         self.parent.outstanding += 1
                         if self.parent.debug:
@@ -101,8 +113,13 @@ class ogcSerialReader(Thread):
         # Flush any existing data from serial port and set ready flag.
         with self.lock:
             if not self.done:
-                self.serial.reset_input_buffer()
-            self.ready = True
+                try:
+                    self.serial.reset_input_buffer()
+                    self.ready = True
+                except:
+                    self.parent.error("Reader Thread: Failed to flush input!")
+                    self.ready = "error"
+                    self.done = True
 
         # Loop until done.
         while not self.done:
@@ -112,7 +129,16 @@ class ogcSerialReader(Thread):
                 if self.parent.data is not None:
                     if self.parent.outstanding:
                         # There are outstanding write(s), so read a response line.
-                        response = self.serial.readline()
+                        try:
+                            response = self.serial.readline()
+                        except:
+                            self.parent.error("Reader Thread: Failed to read line!")
+                            try:
+                                self.serial.write("\nM5\nM2\n".encode(encoding="utf-8"))
+                                self.serial.flush()
+                            except:
+                                pass
+                            break
                     elif self.parent.writer and self.parent.writer.done:
                         # There are no outstanding write(s) and writer is done.
                         self.done = True
@@ -303,12 +329,15 @@ class ogcSerialDriver:
         if self.debug:
             print("!! serial stop laser and flush")
         if self.serial.is_open:
-            self.serial.reset_input_buffer()
-            self.serial.reset_output_buffer()
-            self.serial.write("\nM5\nM2".encode(encoding="utf-8"))
-            self.serial.flush()
-            self.serial.reset_input_buffer()
-            self.serial.reset_output_buffer()
+            try:
+                self.serial.reset_input_buffer()
+                self.serial.reset_output_buffer()
+                self.serial.write("\nM5\nM2\n".encode(encoding="utf-8"))
+                self.serial.flush()
+                self.serial.reset_input_buffer()
+                self.serial.reset_output_buffer()
+            except:
+                self.error("Failed to stop laser!")
         self.message("Serial port stopped.")
         return
 

@@ -375,13 +375,14 @@ class ogcEditorViewer(wx.Panel):
 # Controller for the image editor UI panel.
 class ogcEditorController(wx.Panel):
 
-    def __init__(self, parent):
+    def __init__(self, parent, mode):
         # Set up layout, controls, and event bindings for the editor panel.
         style = wx.BORDER_NONE
         super(ogcEditorController, self).__init__(parent, style=style)
         self.min_size = [150, 480]
         self.SetMinSize(self.min_size)
         self.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BACKGROUND))
+        self.mode = mode
         box_main = wx.BoxSizer(wx.HORIZONTAL)
 
         # Left border.
@@ -534,7 +535,7 @@ class ogcEditorPanel(wx.Panel):
         box_main.Add(self.viewer, 1, wx.EXPAND)
         # Create and add the controller panel.
         box_controller = wx.BoxSizer(wx.VERTICAL)
-        self.controller = ogcEditorController(self)
+        self.controller = ogcEditorController(self, self.mode)
         box_controller.Add(self.controller, 1, wx.EXPAND)
         box_main.Add(box_controller, 0, wx.EXPAND)
         # Apply the layout.
