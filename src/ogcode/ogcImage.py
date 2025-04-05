@@ -13,114 +13,13 @@ import numpy as np
 from typing import List, Tuple
 
 from .ogcSettings import ogcSettings
-
-################################################################################################
-
-################################################################
-def contours_to_lines(contours: List[np.ndarray]) -> np.ndarray:
-    # Convert contours into a single numpy array of line segments, including closing edges.
-    lines = []
-    for contour in contours:
-        if len(contour) < 2:
-            continue
-        start_points = contour
-        end_points = np.roll(contour, -1, axis=0)
-        segment_pairs = np.stack([start_points, end_points], axis=1)
-        lines.append(segment_pairs)
-
-    if len(lines) > 0:
-        return np.concatenate(lines, axis=0)
-    else:
-        return np.empty((0, 2, 2), dtype=float)
-
-################################################################
-def bresenham_line(p0, p1):
-    # Bresenham's line algorithm for integer pixel coordinates.
-    x0, y0 = p0
-    x1, y1 = p1
-    points = []
-    dx = abs(x1 - x0)
-    dy = abs(y1 - y0)
-    sx = 1 if x0 < x1 else -1
-    sy = 1 if y0 < y1 else -1
-    err = dx - dy
-    while True:
-        points.append((x0, y0))
-        if x0 == x1 and y0 == y1:
-            break
-        e2 = 2 * err
-        if e2 > -dy:
-            err -= dy
-            x0 += sx
-        if e2 < dx:
-            err += dx
-            y0 += sy
-    return points
-
-################################################################
-def simplify_lines(
-        lines: np.ndarray,
-        edges: np.ndarray,
-        scale: float = 0.5
-) -> Tuple[np.ndarray, np.ndarray]:
-    # Simplify lines by rasterizing them onto a low-resolution canvas and
-    # extracting only contributing segments. Returns a numpy array of lines.
-    if lines.shape[0] == 0:
-        return np.empty((0, 2, 2), dtype=float), edges
-
-    orig_height, orig_width = edges.shape[:2]
-    width = int(orig_width * scale)
-    height = int(orig_height * scale)
-
-    min_xy = np.array([0.0, 0.0])
-    max_xy = np.array([width, height], dtype=float)
-    span = max_xy - min_xy
-
-    canvas = np.zeros((height, width), dtype=bool)
-    norm_points = (lines - min_xy) / span
-    scaled_points = ((norm_points * [width, height]) - 0.5).astype(int)
-
-    diffs = scaled_points[:, 1] - scaled_points[:, 0]
-    lengths = np.linalg.norm(diffs, axis=1)
-    sort_indices = np.argsort(-lengths)
-    sorted_scaled = scaled_points[sort_indices]
-    sorted_original = lines[sort_indices]
-
-    kept_segments = []
-
-    for i in range(sorted_scaled.shape[0]):
-        p1_canvas, p2_canvas = sorted_scaled[i]
-        line_pixels = bresenham_line(tuple(p1_canvas), tuple(p2_canvas))
-
-        start_pixel = None
-        last_pixel = None
-
-        for x, y in line_pixels:
-            if 0 <= y < height and 0 <= x < width:
-                if not canvas[y, x]:
-                    canvas[y, x] = True
-                    if start_pixel is None:
-                        start_pixel = (x, y)
-                    last_pixel = (x, y)
-                else:
-                    if start_pixel is not None and last_pixel is not None:
-                        p_start = ((np.array(start_pixel) + 0.5) / [width, height]) * [orig_width, orig_height]
-                        p_end = ((np.array(last_pixel) + 0.5) / [width, height]) * [orig_width, orig_height]
-                        kept_segments.append([p_start, p_end])
-                        start_pixel = None
-                        last_pixel = None
-
-        if start_pixel is not None and last_pixel is not None:
-            p_start = ((np.array(start_pixel) + 0.5) / [width, height]) * [orig_width, orig_height]
-            p_end = ((np.array(last_pixel) + 0.5) / [width, height]) * [orig_width, orig_height]
-            kept_segments.append([p_start, p_end])
-
-    # Convert boolean canvas to uint8 RGB image for visualization.
-    canvas_image = (canvas.astype(np.uint8) * 255)
-    edges_rgb = cv2.cvtColor(canvas_image, cv2.COLOR_GRAY2RGB)
-    edges_resized = cv2.resize(edges_rgb, (orig_width, orig_height), interpolation=cv2.INTER_NEAREST)
-
-    return np.array(kept_segments), edges_resized
+from .ogcVector import (
+    contours_to_lines,
+    bresenham_line,
+    simplify_lines,
+    flip_lines,
+    rotate_lines
+)
 
 ################################################################################################
 
@@ -320,6 +219,34 @@ class ogcImage():
 
         # Copy original image into new canvas and return self.
         self.cv_image[y:y + oh, x:x + ow] = orig
+        return self
+
+    ################################################################
+    # Rotate the image either clockwise or counter-clockwise.
+    def Rotate(self, clockwise=True):
+        # Save original shape before rotation
+        h, w = self.cv_image.shape[:2]
+        if clockwise:
+            self.cv_image = cv2.rotate(self.cv_image, cv2.ROTATE_90_CLOCKWISE)
+        else:
+            self.cv_image = cv2.rotate(self.cv_image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        # Rotate associated lines
+        if hasattr(self, 'lines') and self.lines.size > 0:
+            self.lines = rotate_lines(self.lines, height=h, width=w, clockwise=clockwise)
+        return self
+
+    ################################################################
+    # Flip the image either vertically or horizontally.
+    def Flip(self, vertical=True):
+        # Save original shape before flip
+        h, w = self.cv_image.shape[:2]
+        if vertical:
+            self.cv_image = cv2.flip(self.cv_image, 0)  # Flip vertically
+        else:
+            self.cv_image = cv2.flip(self.cv_image, 1)  # Flip horizontally
+        # Flip associated lines
+        if hasattr(self, 'lines') and self.lines.size > 0:
+            self.lines = flip_lines(self.lines, height=h, width=w, vertical=vertical)
         return self
 
 ################################################################################################

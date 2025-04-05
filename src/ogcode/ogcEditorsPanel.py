@@ -10,6 +10,7 @@ This file holds the code for the notebook panel and toolbar.
 import wx
 
 from .ogcIcons import ogcIcons
+from .ogcEditor import EditorTool
 from .ogcEvents import ogcEvents
 from .ogcPlaceHolder import ogcPlaceHolder
 from .ogcEditorsNotebook import ogcEditorsNotebook
@@ -17,14 +18,9 @@ from .ogcEditorsNotebook import ogcEditorsNotebook
 ################################################################################################
 
 class ogcEditorsPanel(wx.Window):
-    # IDs for toolbar buttons.
-    ID_NEW         = 1001
-    ID_COPY        = 1002
-    ID_PASTE       = 1003
-    ID_ZOOM_IN     = 1004
-    ID_ZOOM_OUT    = 1005
-    ID_CLOSE       = 1006
-    ID_ENGRAVE     = 1007
+    ID_CLOSE   = 1000
+    ID_NEW     = 1001
+    ID_ENGRAVE = 1002
 
     def __init__(self, parent):
         # Set style and call superclass constructor.
@@ -37,10 +33,12 @@ class ogcEditorsPanel(wx.Window):
         tools = [
             (self.ID_CLOSE, "Close Tab", 'cross', self.OnToolTabClose),
             (self.ID_NEW, "New Tab", 'page_add', self.OnToolTabNew),
-            (self.ID_COPY, "Copy", 'page_copy', self.OnToolCopy),
-            (self.ID_PASTE, "Paste", 'page_paste', self.OnToolPaste),
-            (self.ID_ZOOM_OUT, "Zoom Out", 'zoom_out', self.OnToolZoomOut),
-            (self.ID_ZOOM_IN, "Zoom In", 'zoom_in', self.OnToolZoomIn),
+            (EditorTool.ROT_CLOCK, "Rotate Clockwise", 'rotate_clockwise', self.OnToolRotClk),
+            (EditorTool.ROT_ACLOCK, "Rotate Anti-Clockwise", 'rotate_anticlockwise', self.OnToolRotAClk),
+            (EditorTool.FLIP_H, "Flip Horizontal", 'flip_horizontal', self.OnToolFlipH),
+            (EditorTool.FLIP_V, "Flip Verical", 'flip_vertical', self.OnToolFlipV),
+            (EditorTool.ZOOM_IN, "Zoom In", 'zoom_in', self.OnToolZoomIn),
+            (EditorTool.ZOOM_OUT, "Zoom Out", 'zoom_out', self.OnToolZoomOut),
             (self.ID_ENGRAVE, "Engrave", 'page_go', self.OnToolEngrave),
         ]
         for tool in tools:
@@ -58,33 +56,51 @@ class ogcEditorsPanel(wx.Window):
         self.Show(True)
         return
 
-    def OnToolTabNew(self, event):
-        print("TODO: Toolbar: New Tab.")
-        return
-
     def OnToolTabClose(self, event):
         # Close the current tab.
         self.notebook.CloseTab()
         return
 
-    def OnToolPaste(self, event):
-        print("TODO: Toolbar: Paste.")
+    def OnToolTabNew(self, event):
+        # Open a new file.
+        data, file_path = self.Parent.OpenFileDialog()
+        if data is not None and file_path is not None:
+            self.NewTab(data, file_path)
         return
 
-    def OnToolCopy(self, event):
-        print("TODO: Toolbar: Copy.")
+    def OnToolRotClk(self, event):
+        # Rotate clockwise.
+        self.notebook.ToolCommand(EditorTool.ROT_CLOCK)
+        return
+
+    def OnToolRotAClk(self, event):
+        # Rotate anti-clockwise.
+        self.notebook.ToolCommand(EditorTool.ROT_ACLOCK)
+        return
+
+    def OnToolFlipH(self, event):
+        # Flip horizontal.
+        self.notebook.ToolCommand(EditorTool.FLIP_H)
+        return
+
+    def OnToolFlipV(self, event):
+        # Flip vertical.
+        self.notebook.ToolCommand(EditorTool.FLIP_V)
         return
 
     def OnToolZoomIn(self, event):
-        print("TODO: Toolbar: Zoom in.")
+        # Zoom in.
+        self.notebook.ToolCommand(EditorTool.ZOOM_IN)
         return
 
     def OnToolZoomOut(self, event):
-        print("TODO: Toolbar: Zoom out.")
+        # Zoom out.
+        self.notebook.ToolCommand(EditorTool.ZOOM_OUT)
         return
 
     def OnToolEngrave(self, event):
-        print("TODO: Toolbar: Engrave.")
+        # Engrave.
+        self.Parent.OpenEngraveDialog()
         return
 
     def NewTab(self, data, path):

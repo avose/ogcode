@@ -17,6 +17,7 @@ from .ogcEvents import ogcEvents
 from .ogcSettings import ogcSettings
 from .ogcImage import ogcImage
 from .ogcGCode import gcScript
+from .ogcVector import flip_lines, rotate_lines
 
 ################################################################################################
 
@@ -33,9 +34,18 @@ class ViewerMode(Enum):
     IMAGE = 1
     GCODE = 2
 
+# Tools.
+class EditorTool():
+    ROT_CLOCK   = 2002
+    ROT_ACLOCK  = 2003
+    FLIP_H      = 2004
+    FLIP_V      = 2005
+    ZOOM_IN     = 2006
+    ZOOM_OUT    = 2007
+
 ################################################################################################
 
-class ogcImageEditorViewer(wx.Panel):
+class ogcEditorViewer(wx.Panel):
     def __init__(self, parent, data, path, mode):
         # Initialize panel.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
@@ -96,18 +106,37 @@ class ogcImageEditorViewer(wx.Panel):
         self.gcode = gcScript(lines=self.lines, laser_power=self.laser_power)
         return self.gcode
 
-    def OnMouseWheel(self, event):
-        # Zoom in/out centered on the mouse position with multiplicative scaling.
-        rotation = event.GetWheelRotation()
-        factor = 1.1 if rotation > 0 else 1.0 / 1.1
+    def Zoom(self, factor, pos = None):
+        # Zoom in/out centered on a position with multiplicative scaling.
         new_zoom = max(0.1, min(self.zoom * factor, 32.0))
 
         if not np.isclose(new_zoom, self.zoom):
-            mouse_pos = np.array(event.GetPosition())
-            image_pos = (mouse_pos - self.offset) / self.zoom
+            if pos is None:
+                pos = np.array([self.Size[0]/2, self.Size[1]/2])
+            image_pos = (pos - self.offset) / self.zoom
             self.zoom = new_zoom
-            self.offset = mouse_pos - image_pos * self.zoom
+            self.offset = pos - image_pos * self.zoom
             self.dirty = True
+        return
+
+    def ZoomIn(self, pos = None):
+        # Zoom it at postion pos.
+        self.Zoom(1.1, pos)
+        return
+
+    def ZoomOut(self, pos = None):
+        # Zoom out at postion pos.
+        self.Zoom(1.0 / 1.1, pos)
+        return
+
+    def OnMouseWheel(self, event):
+        # Zoom in/out centered on the mouse position.
+        if event.GetWheelRotation() > 0:
+            mouse_pos = np.array(event.GetPosition())
+            self.ZoomIn(mouse_pos)
+        else:
+            mouse_pos = np.array(event.GetPosition())
+            self.ZoomOut(mouse_pos)
         return
 
     def OnRightDown(self, event):
@@ -277,15 +306,68 @@ class ogcImageEditorViewer(wx.Panel):
             self.dirty = False
         return
 
+    def ToolCommand(self, command):
+        if command == EditorTool.ROT_CLOCK:
+            # Rotate clockwise.
+            if self.mode == ViewerMode.IMAGE:
+                self.orig_image.Rotate(clockwise=True)
+                self.ir_image.Rotate(clockwise=True)
+                self.ir_edges.Rotate(clockwise=True)
+                self.lines = self.ir_edges.lines
+            elif self.mode == ViewerMode.GCODE:
+                self.lines = rotate_lines(self.lines, clockwise=True)
+            self.dirty = True
+        elif command == EditorTool.ROT_ACLOCK:
+            # Rotate anti-clockwise.
+            if self.mode == ViewerMode.IMAGE:
+                self.orig_image.Rotate(clockwise=False)
+                self.ir_image.Rotate(clockwise=False)
+                self.ir_edges.Rotate(clockwise=False)
+                self.lines = self.ir_edges.lines
+            elif self.mode == ViewerMode.GCODE:
+                self.lines = rotate_lines(self.lines, clockwise=False)
+            self.dirty = True
+        elif command == EditorTool.FLIP_H:
+            # Flip horizontal.
+            if self.mode == ViewerMode.IMAGE:
+                self.orig_image.Flip(vertical=False)
+                self.ir_image.Flip(vertical=False)
+                self.ir_edges.Flip(vertical=False)
+                self.lines = self.ir_edges.lines
+            elif self.mode == ViewerMode.GCODE:
+                self.lines = flip_lines(self.lines, vertical=False)
+            self.dirty = True
+        elif command == EditorTool.FLIP_V:
+            # Flip vertical.
+            if self.mode == ViewerMode.IMAGE:
+                self.orig_image.Flip(vertical=True)
+                self.ir_image.Flip(vertical=True)
+                self.ir_edges.Flip(vertical=True)
+                self.lines = self.ir_edges.lines
+            elif self.mode == ViewerMode.GCODE:
+                self.lines = flip_lines(self.lines, vertical=True)
+            self.dirty = True
+        elif command == EditorTool.ZOOM_IN:
+            # Zoom in.
+            self.ZoomIn()
+            pass
+        elif command == EditorTool.ZOOM_OUT:
+            # Zoom out.
+            self.ZoomOut()
+            pass
+        else:
+            print(f"Viewer: Unknown command {command}.")
+        return
+
 ################################################################################################
 
 # Controller for the image editor UI panel.
-class ogcImageEditorController(wx.Panel):
+class ogcEditorController(wx.Panel):
 
     def __init__(self, parent):
         # Set up layout, controls, and event bindings for the editor panel.
         style = wx.BORDER_NONE
-        super(ogcImageEditorController, self).__init__(parent, style=style)
+        super(ogcEditorController, self).__init__(parent, style=style)
         self.min_size = [150, 480]
         self.SetMinSize(self.min_size)
         self.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BACKGROUND))
@@ -423,28 +505,25 @@ class ogcImageEditorController(wx.Panel):
 
 ################################################################################################
 
-class ogcImageEditorPanel(wx.Panel):
+class ogcEditorPanel(wx.Panel):
 
-    def __init__(self, parent, data, path):
+    def __init__(self, parent, data, path, mode):
         # Initialize the panel with border and character input support.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
-        super(ogcImageEditorPanel, self).__init__(parent, style=style)
+        super(ogcEditorPanel, self).__init__(parent, style=style)
         self.SetMinSize((640, 480))
         self.SetBackgroundColour((0, 0, 0))
         # Create an image if passed image data, else use G-Code.
         self.data = data
         self.path = path
-        if isinstance(data, wx.Image):
-            self.mode = ViewerMode.IMAGE
-        else:
-            self.mode = ViewerMode.GCODE
+        self.mode = mode
         # Create and set up the main layout (viewer and controller).
         box_main = wx.BoxSizer(wx.HORIZONTAL)
-        self.viewer = ogcImageEditorViewer(self, self.data, self.path, self.mode)
+        self.viewer = ogcEditorViewer(self, self.data, self.path, self.mode)
         box_main.Add(self.viewer, 1, wx.EXPAND)
         # Create and add the controller panel.
         box_controller = wx.BoxSizer(wx.VERTICAL)
-        self.controller = ogcImageEditorController(self)
+        self.controller = ogcEditorController(self)
         box_controller.Add(self.controller, 1, wx.EXPAND)
         box_main.Add(box_controller, 0, wx.EXPAND)
         # Apply the layout.
@@ -492,5 +571,11 @@ class ogcImageEditorPanel(wx.Panel):
     def GetGCode(self):
         # Return this editor's gcode.
         return self.viewer.GetGCode()
+
+    def ToolCommand(self, command):
+        # Pass along a command from toolbar.
+        self.viewer.ToolCommand(command)
+        return
+
 
 ################################################################################################

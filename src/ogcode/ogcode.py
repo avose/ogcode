@@ -30,6 +30,7 @@ class ogcFrame(wx.Frame):
     ID_ENGRAVE   = 1005
     ID_EXIT      = 1006
 
+    ################################################################
     def __init__(self, app):
         self.app = app
         wx.Frame.__init__(self, None, wx.ID_ANY, f"OG-Code - {ogcVersion}",
@@ -41,6 +42,7 @@ class ogcFrame(wx.Frame):
         self.InitUI()
         return
 
+    ################################################################
     def InitMenuBar(self):
         menubar = wx.MenuBar()
         # File menu.
@@ -82,11 +84,13 @@ class ogcFrame(wx.Frame):
         self.license_frame = None
         return
 
+    ################################################################
     def InitStatusBar(self):
         self.statusbar = ogcStatusBar(self)
         self.SetStatusBar(self.statusbar)
         return
 
+    ################################################################
     def InitUI(self):
         # Setup menu bar / status bar.
         self.InitMenuBar()
@@ -96,43 +100,67 @@ class ogcFrame(wx.Frame):
         # Add the main editors panel.
         self.editor = ogcEditorsPanel(self)
         # Finalize UI layout.
-        box_main.Add(self.editor, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)        
+        box_main.Add(self.editor, 1, wx.TOP | wx.BOTTOM | wx.EXPAND, 0)
         self.SetSizerAndFit(box_main)
         self.Show(True)
         return
 
+    ################################################################
+    def OpenFileDialog(self):
+        # Open a file dialog and return loaded image or gcode data.
+        # Show file selection dialog.
+        style = wx.FD_OPEN | wx.FD_FILE_MUST_EXIST
+        with wx.FileDialog(self, style=style) as file_dialog:
+            # Do nothing if no file selected by user.
+            if file_dialog.ShowModal() != wx.ID_OK:
+                return (None, None)
+            # Check if the file is an image file else assume G-code.
+            file_path = os.path.abspath(file_dialog.GetPath())
+            if wx.Image.CanRead(file_path):
+                # Open as image.
+                image = wx.Image(file_path, wx.BITMAP_TYPE_ANY)
+                return (image, file_path)
+            else:
+                # Open as G-Code.
+                try:
+                    with open(file_path, "r") as gfile:
+                        gcode = ogcGCode.gcScript(text=gfile.read())
+                    return (gcode, file_path)
+                except Exception as excptn:
+                    with wx.MessageDialog(self, "Failed to open G-code file:\n" +
+                                          f"\"{file_path}\"\n" +
+                                          f"\nError:\n{excptn}", caption="G-Code Error",
+                                          style=wx.OK|wx.ICON_ERROR) as dlg:
+                        dlg.ShowModal()
+                    return (None, None)
+        return (None, None)
+
+    ################################################################
+    def OpenEngraveDialog(self):
+        # Open engrave dialog.
+        if self.engrave_frame is None:
+            tab = self.editor.CurrentTab()
+            gcode = self.editor.CurrentTab().GetGCode()
+            if gcode is None:
+                return
+            self.engrave_frame = ogcEngraveFrame(self, gcode)
+        else:
+            self.engrave_frame.Raise()
+        return
+
+    ################################################################
     def MenuHandler(self, event):
         menu_id = event.GetId()
         if menu_id == self.ID_EXIT:
+            # Quit Application.
             self.OnClose()
             self.Destroy()
             return
-        if menu_id == self.ID_OPEN_FILE:
-            # Show file selection dialog.
-            style = wx.FD_OPEN | wx.FD_FILE_MUST_EXIST
-            with wx.FileDialog(self, style=style) as file_dialog:
-                # Do nothing if no file selected by user.
-                if file_dialog.ShowModal() != wx.ID_OK:
-                    return
-                # Check if the file is an image file else assume gcode file.
-                file_path = os.path.abspath(file_dialog.GetPath())
-                if wx.Image.CanRead(file_path):
-                    # Load the image file and add to new image editor tab.
-                    image = wx.Image(file_path, wx.BITMAP_TYPE_ANY)
-                    self.editor.NewTab(image, file_path)
-                else:
-                    # Open G-code file and add to new editor tab.
-                    try:
-                        with open(file_path, "r") as gfile:
-                            gcode = ogcGCode.gcScript(text=gfile.read())
-                    except Exception as excptn:
-                        with wx.MessageDialog(self, "Failed to open G-code file:\n" +
-                                              f"\"{file_path}\"\n" +
-                                              f"\nError:\n{excptn}", caption="G-Code Error",
-                                              style=wx.OK|wx.ICON_ERROR) as dlg:
-                            dlg.ShowModal()
-                        return
-                    self.editor.NewTab(gcode, file_path)
+        elif menu_id == self.ID_OPEN_FILE:
+            # Open a new file.
+            data, file_path = self.OpenFileDialog()
+            if data is not None and file_path is not None:
+                self.editor.NewTab(data, file_path)
             return
         elif menu_id == self.ID_SETTINGS:
             # Open settings dialog.
@@ -147,14 +175,7 @@ class ogcFrame(wx.Frame):
             return
         elif menu_id == self.ID_ENGRAVE:
             # Open engrave dialog.
-            if self.engrave_frame is None:
-                tab = self.editor.CurrentTab()
-                gcode = self.editor.CurrentTab().GetGCode()
-                if gcode is None:
-                    return
-                self.engrave_frame = ogcEngraveFrame(self, gcode)
-            else:
-                self.engrave_frame.Raise()
+            self.OpenEngraveDialog()
             return
         elif menu_id == self.ID_ABOUT:
             # Open about dialog.
@@ -172,6 +193,7 @@ class ogcFrame(wx.Frame):
             return
         return
 
+    ################################################################
     def OnClose(self, event=None):
         # Close any open dialogs.
         if self.engrave_frame is not None:
@@ -191,7 +213,9 @@ class ogcFrame(wx.Frame):
             event.Skip()
         return
 
+    ################################################################
     def OnDestroy(self, event):
+        event.Skip()
         return
 
 ################################################################################################

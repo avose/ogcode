@@ -12,14 +12,15 @@ import os
 
 from .ogcIcons import ogcIcons
 from .ogcEvents import ogcEvents
-from .ogcImageEditor import ogcImageEditorPanel
+from .ogcEditor import ogcEditorPanel, ViewerMode
 from .ogcPlaceHolder import ogcPlaceHolder
 
 ################################################################################################
 
 class ogcEditorsNotebook(wx.Window):
-    ICON_EDITOR    = 0
-    ICON_PLACEHLDR = 1
+    ICON_PLACEHLDR = 0
+    ICON_IMAGE     = 1
+    ICON_GCODE     = 2
 
     def __init__(self, parent):
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
@@ -29,8 +30,9 @@ class ogcEditorsNotebook(wx.Window):
         self.current = False
         box_main = wx.BoxSizer(wx.VERTICAL)
         self.image_list = wx.ImageList(16, 16)
-        self.image_list.Add(ogcIcons.Get('page'))
         self.image_list.Add(ogcIcons.Get('error'))
+        self.image_list.Add(ogcIcons.Get('picture'))
+        self.image_list.Add(ogcIcons.Get('chart_line'))
         self.notebook = wx.Notebook(self)
         self.notebook.SetMinSize(self.min_size)
         self.notebook.SetImageList(self.image_list)
@@ -44,11 +46,17 @@ class ogcEditorsNotebook(wx.Window):
     def NewTab(self, data, path):
         # Remove placeholder and add a new tab.
         self.RemovePlaceHolder()
-        editor = ogcImageEditorPanel(self.notebook, data, path)
+        if isinstance(data, wx.Image):
+            mode = ViewerMode.IMAGE
+            icon = self.ICON_IMAGE
+        else:
+            mode = ViewerMode.GCODE
+            icon = self.ICON_GCODE
+        editor = ogcEditorPanel(self.notebook, data, path, mode)
         self.tabs.append(editor)
         self.notebook.AddPage(editor, f" {os.path.basename(path)}")
         self.notebook.ChangeSelection(len(self.tabs)-1)
-        self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_EDITOR)
+        self.notebook.SetPageImage(len(self.tabs)-1, icon)
         return editor
 
     def CurrentTab(self):
@@ -84,6 +92,14 @@ class ogcEditorsNotebook(wx.Window):
         self.notebook.AddPage(placeholder, " No Open Files.")
         self.notebook.SetPageImage(len(self.tabs)-1, self.ICON_PLACEHLDR)
         self.notebook.SetSelection(len(self.tabs)-1)
+        return
+
+    def ToolCommand(self, command):
+        # Pass along a command from parent's toolbar.
+        tab = self.CurrentTab()
+        if isinstance(tab, ogcPlaceHolder):
+            return
+        tab.ToolCommand(command)
         return
 
 ################################################################################################
