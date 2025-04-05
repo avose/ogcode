@@ -55,11 +55,11 @@ class ogcEditorViewer(wx.Panel):
         self.mode = mode
         self.data = data
         self.path = path
+        self.ir_size = 1024
         if self.mode == ViewerMode.IMAGE:
             self.gcode = None
             self.laser_power = 16
             self.orig_image = ogcImage(self.data).Cleanup()
-            self.ir_size = 1024
             self.ir_image = ogcImage(self.orig_image, width=self.ir_size, height=self.ir_size)
             self.canny_min = 100
             self.canny_max = 200
@@ -68,7 +68,7 @@ class ogcEditorViewer(wx.Panel):
         elif self.mode == ViewerMode.GCODE:
             self.gcode = self.data
             self.laser_power = self.gcode.get_laser_power()
-            self.lines = self.gcode.to_lines()
+            self.lines = self.gcode.to_lines(self.ir_size)
 
         # Rendering and view state.
         self.bitmap = None
@@ -249,30 +249,21 @@ class ogcEditorViewer(wx.Panel):
                 return
             # Draw image and compute line scaling from image if in image mode.
             self.DrawImage(dc)
+            # Compute scaling for lines / points.
             scale = np.array([self.image.width / self.ir_size,
                               self.image.height / self.ir_size]) * self.zoom
-            # This correction is here to deal with some difference between the
-            # GC scaling vs the manual scaling with the points / lines and the DC.
-            # It seems to need to change based on the zoom level to line up perfectly.
-            offset_correction = np.array([1.5, 1.5]) * (self.zoom / 2.0)
-            offset = self.offset + offset_correction
         elif self.mode == ViewerMode.GCODE:
-            # Compute scaling and offset from G-Code if in G-Code mode.
-            gcode_tl, gcode_br = self.gcode.bounds
-            gcode_w = gcode_br[0] - gcode_tl[0]
-            gcode_h = gcode_br[1] - gcode_tl[1]
-            # Avoid division by zero.
-            if gcode_w == 0: gcode_w = 1
-            if gcode_h == 0: gcode_h = 1
-            # Compute base scale to fit G-code inside widget.
-            base_scale = np.array([self.Size[0] / gcode_w, self.Size[1] / gcode_h])
-            # Uniform scaling using the smaller axis
-            uniform_scale = min(base_scale)
-            # Final scale includes zoom
-            scale = np.array([uniform_scale, uniform_scale]) * self.zoom
-            # Offset from G-code origin and pan
-            offset = self.offset - (np.array(gcode_tl) * scale)
+            # Compute scaling for lines / points.
+            scale = np.array([self.Size[0] / self.ir_size,
+                              self.Size[1] / self.ir_size]) * self.zoom
 
+        # This correction is here to deal with some difference between the
+        # GC scaling vs the manual scaling with the points / lines and the DC.
+        # It seems to need to change based on the zoom level to line up perfectly.
+        offset_correction = np.array([1.5, 1.5]) * (self.zoom / 2.0)
+        offset = self.offset + offset_correction
+
+        # Draw lines / points if needed.
         if self.show_lines and self.lines.size > 0:
             # Draw lines and points with a DC so we can pass lists.
             scaled_lines = np.round(self.lines * scale + offset).astype(int)
@@ -315,7 +306,12 @@ class ogcEditorViewer(wx.Panel):
                 self.ir_edges.Rotate(clockwise=True)
                 self.lines = self.ir_edges.lines
             elif self.mode == ViewerMode.GCODE:
-                self.lines = rotate_lines(self.lines, clockwise=True)
+                self.lines = rotate_lines(
+                    self.lines,
+                    width=self.ir_size,
+                    height=self.ir_size,
+                    clockwise=True
+                )
             self.dirty = True
         elif command == EditorTool.ROT_ACLOCK:
             # Rotate anti-clockwise.
@@ -325,7 +321,12 @@ class ogcEditorViewer(wx.Panel):
                 self.ir_edges.Rotate(clockwise=False)
                 self.lines = self.ir_edges.lines
             elif self.mode == ViewerMode.GCODE:
-                self.lines = rotate_lines(self.lines, clockwise=False)
+                self.lines = rotate_lines(
+                    self.lines,
+                    width=self.ir_size,
+                    height=self.ir_size,
+                    clockwise=False
+                )
             self.dirty = True
         elif command == EditorTool.FLIP_H:
             # Flip horizontal.
@@ -335,7 +336,12 @@ class ogcEditorViewer(wx.Panel):
                 self.ir_edges.Flip(vertical=False)
                 self.lines = self.ir_edges.lines
             elif self.mode == ViewerMode.GCODE:
-                self.lines = flip_lines(self.lines, vertical=False)
+                self.lines = flip_lines(
+                    self.lines,
+                    width=self.ir_size,
+                    height=self.ir_size,
+                    vertical=False
+                )
             self.dirty = True
         elif command == EditorTool.FLIP_V:
             # Flip vertical.
@@ -345,7 +351,12 @@ class ogcEditorViewer(wx.Panel):
                 self.ir_edges.Flip(vertical=True)
                 self.lines = self.ir_edges.lines
             elif self.mode == ViewerMode.GCODE:
-                self.lines = flip_lines(self.lines, vertical=True)
+                self.lines = flip_lines(
+                    self.lines,
+                    width=self.ir_size,
+                    height=self.ir_size,
+                    vertical=True
+                )
             self.dirty = True
         elif command == EditorTool.ZOOM_IN:
             # Zoom in.
@@ -576,6 +587,5 @@ class ogcEditorPanel(wx.Panel):
         # Pass along a command from toolbar.
         self.viewer.ToolCommand(command)
         return
-
 
 ################################################################################################

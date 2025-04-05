@@ -198,10 +198,11 @@ class gcScript():
         return "\n".join([str(command) for command in self.commands])
 
     ################################################################
-    def to_lines(self) -> np.ndarray:
+    def to_lines(self, size: int) -> np.ndarray:
         # Convert G-code motion into drawable line segments.
         # Only movements with laser-on (Z < 0) are considered.
-        # Returns a single numpy array of lines with shape (N, 2, 2).
+        # Returns a single numpy array of lines with shape (N, 2, 2),
+        # scaled and centered within a square of the given size.
 
         lines = []
         current_pos = None
@@ -240,9 +241,32 @@ class gcScript():
                         lines.append(np.array([current_pos, next_pos]))
                     current_pos = next_pos
 
-        if lines:
-            return np.stack(lines)
-        return np.empty((0, 2, 2), dtype=float)
+        if not lines:
+            return np.empty((0, 2, 2), dtype=float)
+
+        lines = np.stack(lines)
+
+        # Compute bounding box of the lines
+        min_coords = lines.reshape(-1, 2).min(axis=0)
+        max_coords = lines.reshape(-1, 2).max(axis=0)
+        span = max_coords - min_coords
+
+        # Uniform scale so aspect ratio is preserved
+        max_span = max(span)
+        scale = size / max_span if max_span > 0 else 1.0
+
+        # Centering offset to put the drawing in the middle of the canvas
+        center_offset = (np.array([size, size]) - span * scale) / 2.0
+
+        # Normalize and scale
+        lines = (lines - min_coords) * scale + center_offset
+
+        # Store new bounds of the scaled lines
+        new_min = lines.reshape(-1, 2).min(axis=0)
+        new_max = lines.reshape(-1, 2).max(axis=0)
+        self.bounds = (tuple(new_min), tuple(new_max))
+
+        return lines
 
     ################################################################
     def get_laser_power(self, default: int = 16) -> int:
