@@ -1,6 +1,6 @@
 ################################################################################################
 '''
-Copyright 2024 Aaron Vose (avose@aaronvose.net)
+Copyright 2025 Aaron Vose (avose@aaronvose.net)
 Licensed under the LGPL v2.1; see the file 'LICENSE' for details.
 
 This file holds the code for the main application window's status bar.
