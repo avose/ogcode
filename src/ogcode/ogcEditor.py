@@ -34,14 +34,14 @@ class ViewerMode(Enum):
     IMAGE = 1
     GCODE = 2
 
-# Tools.
+# Tool IDs.
 class EditorTool():
-    ROT_CLOCK   = 2002
-    ROT_ACLOCK  = 2003
-    FLIP_H      = 2004
-    FLIP_V      = 2005
-    ZOOM_IN     = 2006
-    ZOOM_OUT    = 2007
+    ROT_CLOCK   = wx.NewIdRef()
+    ROT_ACLOCK  = wx.NewIdRef()
+    FLIP_H      = wx.NewIdRef()
+    FLIP_V      = wx.NewIdRef()
+    ZOOM_IN     = wx.NewIdRef()
+    ZOOM_OUT    = wx.NewIdRef()
 
 ################################################################################################
 
@@ -56,6 +56,7 @@ class ogcEditorViewer(wx.Panel):
         self.data = data
         self.path = path
         self.ir_size = 1024
+        self.gcode_size = ogcSettings.Get("gcode_size")
         if self.mode == ViewerMode.IMAGE:
             self.gcode = None
             self.laser_power = 16
@@ -103,7 +104,16 @@ class ogcEditorViewer(wx.Panel):
 
     def GetGCode(self):
         # Update G-Code.
-        self.gcode = gcScript(lines=self.lines, laser_power=self.laser_power)
+        if self.mode == ViewerMode.IMAGE:
+            size_in = (self.image.width, self.image.height)
+        elif self.mode == ViewerMode.GCODE:
+            size_in = (self.ir_size, self.ir_size)
+        self.gcode = gcScript(
+            lines=self.lines,
+            laser_power=self.laser_power,
+            size_in=size_in,
+            size_out=(self.gcode_size, self.gcode_size)
+        )
         return self.gcode
 
     def Zoom(self, factor, pos = None):

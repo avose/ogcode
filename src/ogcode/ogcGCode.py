@@ -121,7 +121,13 @@ class gcScript():
                  commands: Optional[List[gcCommand]] = None,
                  text: Optional[str] = None,
                  lines: Optional[np.ndarray] = None,
-                 laser_power: float = 16.0):
+                 laser_power: float = 16.0,
+                 size_in: float = 1024,
+                 size_out: float = 220):
+        # Save settings.
+        self.size_in = size_in
+        self.size_out = size_out
+        self.laser_power = laser_power
         # Construct G-Code script from one of: command list, raw text, or line segments.
         if sum([commands is not None, text is not None, lines is not None]) != 1:
             raise ValueError("ERROR: Provide exactly one of commands, text, or lines.")
@@ -130,7 +136,7 @@ class gcScript():
         elif text is not None:
             self._init_from_text(text)
         elif lines is not None:
-            self._init_from_lines(lines, laser_power)
+            self._init_from_lines(lines)
         self.bounds = self._bounds()
         return
 
@@ -157,26 +163,45 @@ class gcScript():
         self.commands = commands
         return
 
-    def _init_from_lines(self, lines: np.ndarray, laser_power: float):
+    def _init_from_lines(self, lines: np.ndarray):
         # Convert numpy array of line segments into G-Code commands.
         if not isinstance(lines, np.ndarray) or lines.ndim != 3 or lines.shape[1:] != (2, 2):
             raise ValueError("ERROR: 'lines' must be a numpy array with shape (N, 2, 2).")
+
+        # Use the full known image coordinate space to preserve aspect ratio.
+        in_w, in_h = self.size_in
+        out_w, out_h = self.size_out
+        # Compute scale based on the known input size and output target.
+        scale_w = out_w / in_w
+        scale_h = out_h / in_h
+        scale = min(scale_w, scale_h)
+        scaled_w = in_w * scale
+        scaled_h = in_h * scale
+        # Compute offset to center drawing in the output space.
+        offset_x = (out_w - scaled_w) / 2
+        offset_y = (out_h - scaled_h) / 2
+
+        # Collect G-Code commands.
         self.commands = [
             # Absolute positioning.
             gcCommand([gcParam('G', 90)]),
             # Units in mm.
-            gcCommand([gcParam('G', 21)]),
+            gcCommand([gcParam('G', 20)]),
             # XY plane, path blending.
             gcCommand([gcParam('G', 17), gcParam('G', 64), gcParam('P', 0.001)]),
-            # Laser on.
-            gcCommand([gcParam('M', 3), gcParam('S', laser_power)]),
             # Feed rate.
-            gcCommand([gcParam('F', 2.00)])
+            gcCommand([gcParam('F', 2.00)]),
+            # Start at origin off the work surface (laser off).
+            gcCommand([gcParam('G', 0), gcParam('X', 0.0), gcParam('Y', 0.0)]),
+            gcCommand([gcParam('G', 0), gcParam('Z', 0.25)]),
+            # Laser on.
+            gcCommand([gcParam('M', 3), gcParam('S', self.laser_power)]),
         ]
         last_end = None
         for line in lines:
-            x0, y0 = line[0]
-            x1, y1 = line[1]
+            # Scale and center input coordinates from known image coordinate space.
+            x0, y0 = line[0] * scale + [offset_x, offset_y]
+            x1, y1 = line[1] * scale + [offset_x, offset_y]
             if last_end is None or np.linalg.norm(line[0] - last_end) > 1.0:
                 # Lift and reposition if far from previous line.
                 self.commands.append(gcCommand([gcParam('G', 0), gcParam('Z', 0.25)]))
@@ -184,6 +209,7 @@ class gcScript():
                 self.commands.append(gcCommand([gcParam('G', 1), gcParam('Z', -0.005)]))
             self.commands.append(gcCommand([gcParam('G', 1), gcParam('X', x1), gcParam('Y', y1)]))
             last_end = line[1]
+
         # Final lift.
         self.commands.append(gcCommand([gcParam('G', 0), gcParam('Z', 0.25)]))
         # Laser off.
@@ -203,11 +229,11 @@ class gcScript():
         # Only movements with laser-on (Z < 0) are considered.
         # Returns a single numpy array of lines with shape (N, 2, 2),
         # scaled and centered within a square of the given size.
-
         lines = []
         current_pos = None
         z_value = None
 
+        # Loop over all G-Code commands.
         for command in self.commands:
             if command.code.name != 'G':
                 continue
@@ -221,7 +247,6 @@ class gcScript():
                     y = arg.value
                 elif arg.name == 'Z':
                     z = arg.value
-
             if z is not None:
                 z_value = z
 
@@ -235,37 +260,32 @@ class gcScript():
                     ])
                 elif x is not None and y is not None:
                     next_pos = np.array([x, y])
-
                 if next_pos is not None:
                     if z_value is not None and z_value < 0:
                         lines.append(np.array([current_pos, next_pos]))
                     current_pos = next_pos
 
+        # Finalize lines array.
         if not lines:
             return np.empty((0, 2, 2), dtype=float)
-
         lines = np.stack(lines)
 
-        # Compute bounding box of the lines
+        # Compute bounding box of the lines.
         min_coords = lines.reshape(-1, 2).min(axis=0)
         max_coords = lines.reshape(-1, 2).max(axis=0)
         span = max_coords - min_coords
-
-        # Uniform scale so aspect ratio is preserved
+        # Uniform scale so aspect ratio is preserved.
         max_span = max(span)
         scale = size / max_span if max_span > 0 else 1.0
-
-        # Centering offset to put the drawing in the middle of the canvas
+        # Centering offset to put the drawing in the middle of the canvas.
         center_offset = (np.array([size, size]) - span * scale) / 2.0
 
-        # Normalize and scale
+        # Normalize and scale.
         lines = (lines - min_coords) * scale + center_offset
-
-        # Store new bounds of the scaled lines
+        # Store new bounds of the scaled lines.
         new_min = lines.reshape(-1, 2).min(axis=0)
         new_max = lines.reshape(-1, 2).max(axis=0)
         self.bounds = (tuple(new_min), tuple(new_max))
-
         return lines
 
     ################################################################

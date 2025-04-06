@@ -18,9 +18,10 @@ from .ogcEditorsNotebook import ogcEditorsNotebook
 ################################################################################################
 
 class ogcEditorsPanel(wx.Window):
-    ID_CLOSE   = 1000
-    ID_NEW     = 1001
-    ID_ENGRAVE = 1002
+    ID_CLOSE   = wx.NewIdRef()
+    ID_NEW     = wx.NewIdRef()
+    ID_SAVE    = wx.NewIdRef()
+    ID_ENGRAVE = wx.NewIdRef()
 
     def __init__(self, parent):
         # Set style and call superclass constructor.
@@ -33,8 +34,9 @@ class ogcEditorsPanel(wx.Window):
         tools = [
             (self.ID_CLOSE, "Close Tab", 'cross', self.OnToolTabClose),
             (self.ID_NEW, "New Tab", 'page_add', self.OnToolTabNew),
-            (EditorTool.ROT_CLOCK, "Rotate Clockwise", 'rotate_clockwise', self.OnToolRotClk),
+            (self.ID_SAVE, "Save G-Code", 'disk', self.OnToolSave),
             (EditorTool.ROT_ACLOCK, "Rotate Anti-Clockwise", 'rotate_anticlockwise', self.OnToolRotAClk),
+            (EditorTool.ROT_CLOCK, "Rotate Clockwise", 'rotate_clockwise', self.OnToolRotClk),
             (EditorTool.FLIP_H, "Flip Horizontal", 'flip_horizontal', self.OnToolFlipH),
             (EditorTool.FLIP_V, "Flip Verical", 'flip_vertical', self.OnToolFlipV),
             (EditorTool.ZOOM_IN, "Zoom In", 'zoom_in', self.OnToolZoomIn),
@@ -66,6 +68,13 @@ class ogcEditorsPanel(wx.Window):
         data, file_path = self.Parent.OpenFileDialog()
         if data is not None and file_path is not None:
             self.NewTab(data, file_path)
+        return
+
+    def OnToolSave(self, event):
+        # Save G-Code file.
+        gcode = self.notebook.CurrentTab().GetGCode()
+        if gcode is not None:
+            self.Parent.SaveFileDialog(str(gcode))
         return
 
     def OnToolRotClk(self, event):

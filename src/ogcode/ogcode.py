@@ -136,6 +136,26 @@ class ogcFrame(wx.Frame):
         return (None, None)
 
     ################################################################
+    def SaveFileDialog(self, gcode):
+        # Open a save file dialog for storing G-Code.
+        style = wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT
+        wildcard = "G-Code files (*.ngc)|*.ngc"
+        with wx.FileDialog(self, message="Save G-Code file", wildcard=wildcard,
+                           style=style) as file_dialog:
+            # Do nothing if no file selected by user.
+            if file_dialog.ShowModal() != wx.ID_OK:
+                return None
+            file_path = os.path.abspath(file_dialog.GetPath())
+            # Ensure the file has the .ngc extension.
+            if not file_path.lower().endswith(".ngc"):
+                file_path += ".ngc"
+            # Write G-Code to the file.
+            with open(file_path, "w", encoding="utf-8") as gcode_file:
+                gcode_file.write(gcode)
+                gcode_file.write("\n")
+        return
+
+    ################################################################
     def OpenEngraveDialog(self):
         # Open engrave dialog.
         if self.engrave_frame is None:
