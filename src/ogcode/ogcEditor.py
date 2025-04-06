@@ -229,10 +229,8 @@ class ogcEditorViewer(wx.Panel):
         return
 
     def OnLaserPower(self, event):
-        # Toggle line overlay visibility.
-        if self.laser_power != event.value:
-            self.dirty = True
-            self.laser_power = event.value
+        # Set laser power.
+        self.laser_power = event.value
         return
 
     def DrawImage(self, dc):
