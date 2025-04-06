@@ -69,7 +69,8 @@ class ogcEditorViewer(wx.Panel):
             self.lines_scale = np.array([min_dim / self.ir_size, min_dim / self.ir_size])
 
         # Rendering and view state.
-        self.bitmap = None
+        self.image_bitmap = None
+        self.canvas_bitmap = None
         self.color_fg = ogcSettings.Get("editor_fgcolor")
         self.color_bg = ogcSettings.Get("editor_bgcolor")
         self.dirty = True
@@ -185,7 +186,7 @@ class ogcEditorViewer(wx.Panel):
         #self.image = ogcImage(self.ir_edges)
         dims = (self.Size[0], None) if self.Size[0] < self.Size[1] else (None, self.Size[1])
         self.image.Resize(*dims)
-        self.bitmap = wx.Bitmap(self.image.WXImage())
+        self.image_bitmap = wx.Bitmap(self.image.WXImage())
         return
 
     def OnIRSize(self, event):
@@ -226,33 +227,43 @@ class ogcEditorViewer(wx.Panel):
         self.laser_power = event.value
         return
 
-    def DrawImage(self, dc):
-        # Draw image if needed.
-        if self.show_image:
-            # Draw the bitmap with a GC so it can be scaled easily.
-            gc = wx.GraphicsContext.Create(dc)
-            gc.PushState()
-            gc.Translate(*self.offset)
-            gc.Scale(self.zoom, self.zoom)
-            gc.DrawBitmap(self.bitmap, 0, 0, self.bitmap.GetWidth(), self.bitmap.GetHeight())
-            gc.PopState()
-        return
-
-    def Draw(self, dc):
-        # Avoid drawing too early, clear everything.
+    def OnPaint(self, event):
+        # Avoid drawing too early.
         if self.Size[0] <= 0 or self.Size[1] <= 0:
             return
+
+        # Clear background.
+        dc = wx.BufferedPaintDC(self)
         dc.SetBrush(wx.Brush(self.color_bg))
         dc.SetPen(wx.Pen(self.color_bg))
         dc.DrawRectangle(0, 0, self.Size[0], self.Size[1])
 
+        # If no redraw needed, draw cached bitmap and return.
+        if self.canvas_bitmap is not None and not self.dirty:
+            dc.DrawBitmap(self.canvas_bitmap, 0, 0, True)
+            return
+
+        # Recompute cached bitmap.
+        self.canvas_bitmap = wx.Bitmap(self.Size[0], self.Size[1])
+        mem_dc = wx.MemoryDC(self.canvas_bitmap)
+        gc = wx.GraphicsContext.Create(mem_dc)
+
         # Change rendering based on mode.
         if self.mode == ViewerMode.IMAGE:
-            # Draw nothing if there is no bitmap.
-            if self.bitmap is None:
+            if self.image_bitmap is None:
                 return
-            # Draw image and compute line scaling from image if in image mode.
-            self.DrawImage(dc)
+            if self.show_image:
+                # Draw the image bitmap with a GC so it can be scaled easily.
+                gc.PushState()
+                gc.Translate(*self.offset)
+                gc.Scale(self.zoom, self.zoom)
+                gc.DrawBitmap(
+                    self.image_bitmap,
+                    0, 0,
+                    self.image_bitmap.GetWidth(),
+                    self.image_bitmap.GetHeight()
+                )
+                gc.PopState()
             # Compute scaling for lines / points.
             scale = np.array([self.image.width / self.ir_size,
                               self.image.height / self.ir_size]) * self.zoom
@@ -268,20 +279,15 @@ class ogcEditorViewer(wx.Panel):
 
         # Draw lines / points if needed.
         if self.show_lines and self.lines.size > 0:
-            # Draw lines and points with a DC so we can pass lists.
             scaled_lines = np.round(self.lines * scale + offset).astype(int)
-            dc.SetPen(wx.Pen((0, 255, 0)))
-            dc.DrawLineList(scaled_lines.reshape(-1, 4).tolist())
-            # Draw points.
-            dc.SetPen(wx.Pen((255, 0, 0)))
-            dc.DrawPointList(scaled_lines.reshape(-1, 2).tolist())
+            mem_dc.SetPen(wx.Pen((0, 255, 0)))
+            mem_dc.DrawLineList(scaled_lines.reshape(-1, 4).tolist())
+            mem_dc.SetPen(wx.Pen((255, 0, 0)))
+            mem_dc.DrawPointList(scaled_lines.reshape(-1, 2).tolist())
 
-        return
-
-    def OnPaint(self, event):
-        # Triggered when the widget needs to be redrawn.
-        dc = wx.BufferedPaintDC(self)
-        self.Draw(dc)
+        # Draw the updated cached bitmap.
+        mem_dc.SelectObject(wx.NullBitmap)
+        dc.DrawBitmap(self.canvas_bitmap, 0, 0, True)
         return
 
     def OnSize(self, event=None):
@@ -299,8 +305,8 @@ class ogcEditorViewer(wx.Panel):
                 if self.recenter_on_next_render:
                     self.zoom = 1.0
                     self.offset = np.array([
-                        (self.Size[0] - self.bitmap.GetWidth()) / 2,
-                        (self.Size[1] - self.bitmap.GetHeight()) / 2
+                        (self.Size[0] - self.image_bitmap.GetWidth()) / 2,
+                        (self.Size[1] - self.image_bitmap.GetHeight()) / 2
                     ])
             elif self.mode == ViewerMode.GCODE:
                 # Center G-Code if requested.

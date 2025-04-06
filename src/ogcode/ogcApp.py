@@ -17,6 +17,7 @@ class ogcAppManager():
     def __init__(self):
         if ogcAppManager.__wxapp is None:
             ogcAppManager.__wxapp = wx.App(0)
+            ogcAppManager.__wxapp.SetAppName("OG-Code")
         return
 
     def get(self):
