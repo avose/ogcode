@@ -40,6 +40,7 @@ class ogcEditorsPanel(wx.Window):
             (EditorTool.FLIP_H, "Flip Horizontal", 'flip_horizontal', self.OnToolFlipH),
             (EditorTool.FLIP_V, "Flip Verical", 'flip_vertical', self.OnToolFlipV),
             (EditorTool.ZOOM_IN, "Zoom In", 'zoom_in', self.OnToolZoomIn),
+            (EditorTool.ZOOM_DEF, "Zoom Default", 'zoom', self.OnToolZoomDef),
             (EditorTool.ZOOM_OUT, "Zoom Out", 'zoom_out', self.OnToolZoomOut),
             (self.ID_ENGRAVE, "Engrave", 'page_go', self.OnToolEngrave),
         ]
@@ -100,6 +101,11 @@ class ogcEditorsPanel(wx.Window):
     def OnToolZoomIn(self, event):
         # Zoom in.
         self.notebook.ToolCommand(EditorTool.ZOOM_IN)
+        return
+
+    def OnToolZoomDef(self, event):
+        # Zoom default (and center).
+        self.notebook.ToolCommand(EditorTool.ZOOM_DEF)
         return
 
     def OnToolZoomOut(self, event):

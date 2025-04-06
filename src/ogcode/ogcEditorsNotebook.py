@@ -53,8 +53,11 @@ class ogcEditorsNotebook(wx.Window):
             mode = ViewerMode.GCODE
             icon = self.ICON_GCODE
         editor = ogcEditorPanel(self.notebook, data, path, mode)
+        tab_name = os.path.basename(path)
+        if len(tab_name) >= 16:
+            tab_name = tab_name[:8] + "..." + tab_name[-8:]
         self.tabs.append(editor)
-        self.notebook.AddPage(editor, f" {os.path.basename(path)}")
+        self.notebook.AddPage(editor, f" {tab_name}")
         self.notebook.ChangeSelection(len(self.tabs)-1)
         self.notebook.SetPageImage(len(self.tabs)-1, icon)
         return editor

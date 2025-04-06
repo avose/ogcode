@@ -41,6 +41,7 @@ class EditorTool():
     FLIP_H      = wx.NewIdRef()
     FLIP_V      = wx.NewIdRef()
     ZOOM_IN     = wx.NewIdRef()
+    ZOOM_DEF    = wx.NewIdRef()
     ZOOM_OUT    = wx.NewIdRef()
 
 ################################################################################################
@@ -140,6 +141,13 @@ class ogcEditorViewer(wx.Panel):
     def ZoomOut(self, pos = None):
         # Zoom out at postion pos.
         self.Zoom(1.0 / 1.1, pos)
+        return
+
+    def ZoomDef(self, pos = None):
+        # Restore default zoom and recenter.
+        self.zoom = 1.0
+        self.recenter_on_next_render = True
+        self.dirty = True
         return
 
     def OnMouseWheel(self, event):
@@ -386,6 +394,10 @@ class ogcEditorViewer(wx.Panel):
             # Zoom in.
             self.ZoomIn()
             pass
+        elif command == EditorTool.ZOOM_DEF:
+            # Zoom in.
+            self.ZoomDef()
+            pass
         elif command == EditorTool.ZOOM_OUT:
             # Zoom out.
             self.ZoomOut()
@@ -403,7 +415,7 @@ class ogcEditorController(wx.Panel):
         # Set up layout, controls, and event bindings for the editor panel.
         style = wx.BORDER_NONE
         super(ogcEditorController, self).__init__(parent, style=style)
-        self.min_size = [150, 480]
+        self.min_size = [164, 480]
         self.SetMinSize(self.min_size)
         self.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BACKGROUND))
         self.mode = mode
@@ -429,17 +441,17 @@ class ogcEditorController(wx.Panel):
             self.ir_size_ctrl.SetSelection(1)
 
             # Threshold sliders.
-            threshold_min_label = wx.StaticText(content, label="Threshold Min:")
+            threshold_min_label = wx.StaticText(content, label="Edge Threshold Min:")
             self.threshold_min_slider = wx.Slider(content, minValue=0, maxValue=255, style=wx.SL_HORIZONTAL)
             self.threshold_min_slider.SetValue(100)
             self.threshold_min_value = wx.StaticText(content, label="100")
-            self.threshold_min_value.SetMinSize((30, 1))
+            self.threshold_min_value.SetMinSize((32, -1))
 
-            threshold_max_label = wx.StaticText(content, label="Threshold Max:")
+            threshold_max_label = wx.StaticText(content, label="Edge Threshold Max:")
             self.threshold_max_slider = wx.Slider(content, minValue=0, maxValue=255, style=wx.SL_HORIZONTAL)
             self.threshold_max_slider.SetValue(200)
             self.threshold_max_value = wx.StaticText(content, label="200")
-            self.threshold_max_value.SetMinSize((30, 1))
+            self.threshold_max_value.SetMinSize((32, -1))
 
             box_min_slider = wx.BoxSizer(wx.HORIZONTAL)
             box_min_slider.Add(self.threshold_min_slider, 1, wx.EXPAND | wx.RIGHT, 1)
@@ -458,6 +470,7 @@ class ogcEditorController(wx.Panel):
             # Layout order for image mode.
             box_content.Add(ir_size_label, 0, wx.LEFT | wx.TOP, 2)
             box_content.Add(self.ir_size_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 2)
+            box_content.AddSpacer(6)
             box_content.Add(threshold_min_label, 0, wx.LEFT | wx.TOP, 2)
             box_content.Add(box_min_slider, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 2)
             box_content.Add(threshold_max_label, 0, wx.LEFT | wx.TOP, 0)
@@ -468,7 +481,7 @@ class ogcEditorController(wx.Panel):
         self.laser_power_slider = wx.Slider(content, minValue=0, maxValue=255, style=wx.SL_HORIZONTAL)
         self.laser_power_slider.SetValue(16)
         self.laser_power_value = wx.StaticText(content, label="16")
-        self.laser_power_value.SetMinSize((30, 1))
+        self.laser_power_value.SetMinSize((32, -1))
 
         box_laser_slider = wx.BoxSizer(wx.HORIZONTAL)
         box_laser_slider.Add(self.laser_power_slider, 1, wx.EXPAND | wx.RIGHT, 1)
