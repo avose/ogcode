@@ -21,13 +21,6 @@ from .ogcVector import flip_lines, rotate_lines
 
 ################################################################################################
 
-# Define custom events for interactivity and UI control.
-ThresholdEvent, EVT_THRESHOLD = wx.lib.newevent.NewEvent()
-ShowImageEvent, EVT_SHOW_IMAGE = wx.lib.newevent.NewEvent()
-ShowLinesEvent, EVT_SHOW_LINES = wx.lib.newevent.NewEvent()
-IRSizeEvent, EVT_IR_SIZE = wx.lib.newevent.NewEvent()
-LaserPowerEvent, EVT_LASER_POWER = wx.lib.newevent.NewEvent()
-
 # Viewer modes.
 from enum import Enum
 class ViewerMode(Enum):
@@ -97,11 +90,11 @@ class ogcEditorViewer(wx.Panel):
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
         self.Bind(wx.EVT_MOTION, self.OnMouseMove)
-        self.Bind(EVT_THRESHOLD, self.OnThreshold)
-        self.Bind(EVT_IR_SIZE, self.OnIRSize)
-        self.Bind(EVT_SHOW_IMAGE, self.OnShowImage)
-        self.Bind(EVT_SHOW_LINES, self.OnShowLines)
-        self.Bind(EVT_LASER_POWER, self.OnLaserPower)
+        self.Bind(ogcEvents.EVT_THRESHOLD, self.OnThreshold)
+        self.Bind(ogcEvents.EVT_IR_SIZE, self.OnIRSize)
+        self.Bind(ogcEvents.EVT_SHOW_IMAGE, self.OnShowImage)
+        self.Bind(ogcEvents.EVT_SHOW_LINES, self.OnShowLines)
+        self.Bind(ogcEvents.EVT_LASER_POWER, self.OnLaserPower)
 
         wx.CallAfter(self.OnSize)
         return
@@ -513,7 +506,7 @@ class ogcEditorController(wx.Panel):
         # Notify parent that IR size is changed.
         selection = self.ir_size_ctrl.GetStringSelection()
         ir_size_value = self.ir_size_values.get(selection, 1024)
-        ir_size_event = IRSizeEvent(value=ir_size_value)
+        ir_size_event = ogcEvents.IRSize(value=ir_size_value)
         wx.PostEvent(self.Parent, ir_size_event)
         return
 
@@ -530,7 +523,7 @@ class ogcEditorController(wx.Panel):
                 self.threshold_min_slider.SetValue(min_value)
         self.threshold_min_value.SetLabel(str(min_value))
         self.threshold_max_value.SetLabel(str(max_value))
-        threshold_event = ThresholdEvent(min_value=min_value, max_value=max_value)
+        threshold_event = ogcEvents.Threshold(min_value=min_value, max_value=max_value)
         wx.PostEvent(self.Parent, threshold_event)
         return
 
@@ -538,21 +531,21 @@ class ogcEditorController(wx.Panel):
         # Notify parent when laser power slider is adjusted.
         power_value = self.laser_power_slider.GetValue()
         self.laser_power_value.SetLabel(str(power_value))
-        power_event = LaserPowerEvent(value=power_value)
+        power_event = ogcEvents.LaserPower(value=power_value)
         wx.PostEvent(self.Parent, power_event)
         return
 
     def OnShowImage(self, event):
         # Notify parent when show image checkbox is toggled.
         show_image_value = self.show_image_checkbox.GetValue()
-        show_image_event = ShowImageEvent(value=show_image_value)
+        show_image_event = ogcEvents.ShowImage(value=show_image_value)
         wx.PostEvent(self.Parent, show_image_event)
         return
 
     def OnShowLines(self, event):
         # Notify parent when show lines checkbox is toggled.
         show_lines_value = self.show_lines_checkbox.GetValue()
-        show_lines_event = ShowLinesEvent(value=show_lines_value)
+        show_lines_event = ogcEvents.ShowLines(value=show_lines_value)
         wx.PostEvent(self.Parent, show_lines_event)
         return
 
@@ -582,42 +575,42 @@ class ogcEditorPanel(wx.Panel):
         # Apply the layout.
         self.SetSizerAndFit(box_main)
         # Bind custom events to the appropriate handler methods.
-        self.Bind(EVT_THRESHOLD, self.OnThreshold)
-        self.Bind(EVT_IR_SIZE, self.OnIRSize)
-        self.Bind(EVT_SHOW_IMAGE, self.OnShowImage)
-        self.Bind(EVT_SHOW_LINES, self.OnShowLines)
-        self.Bind(EVT_LASER_POWER, self.OnLaserPower)
+        self.Bind(ogcEvents.EVT_THRESHOLD, self.OnThreshold)
+        self.Bind(ogcEvents.EVT_IR_SIZE, self.OnIRSize)
+        self.Bind(ogcEvents.EVT_SHOW_IMAGE, self.OnShowImage)
+        self.Bind(ogcEvents.EVT_SHOW_LINES, self.OnShowLines)
+        self.Bind(ogcEvents.EVT_LASER_POWER, self.OnLaserPower)
         # Display the panel.
         self.Show(True)
         return
 
     def OnThreshold(self, event):
         # Forward threshold event to the viewer.
-        viewer_event = ThresholdEvent(min_value=event.min_value, max_value=event.max_value)
+        viewer_event = ogcEvents.Threshold(min_value=event.min_value, max_value=event.max_value)
         wx.PostEvent(self.viewer, viewer_event)
         return
 
     def OnIRSize(self, event):
         # Forward IR size event to the viewer.
-        viewer_event = IRSizeEvent(value=event.value)
+        viewer_event = ogcEvents.IRSize(value=event.value)
         wx.PostEvent(self.viewer, viewer_event)
         return
 
     def OnShowImage(self, event):
         # Forward show image event to the viewer.
-        show_image_event = ShowImageEvent(value=event.value)
+        show_image_event = ogcEvents.ShowImage(value=event.value)
         wx.PostEvent(self.viewer, show_image_event)
         return
 
     def OnShowLines(self, event):
         # Forward show lines event to the viewer.
-        show_lines_event = ShowLinesEvent(value=event.value)
+        show_lines_event = ogcEvents.ShowLines(value=event.value)
         wx.PostEvent(self.viewer, show_lines_event)
         return
 
     def OnLaserPower(self, event):
         # Forward laser power event to the viewer.
-        laser_power_event = LaserPowerEvent(value=event.value)
+        laser_power_event = ogcEvents.LaserPower(value=event.value)
         wx.PostEvent(self.viewer, laser_power_event)
         return
 
