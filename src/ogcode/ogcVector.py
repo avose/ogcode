@@ -80,16 +80,10 @@ def simplify_lines(
     norm_points = (lines - min_xy) / span
     scaled_points = ((norm_points * [width, height]) - 0.5).astype(int)
 
-    diffs = scaled_points[:, 1] - scaled_points[:, 0]
-    lengths = np.linalg.norm(diffs, axis=1)
-    sort_indices = np.argsort(-lengths)
-    sorted_scaled = scaled_points[sort_indices]
-    sorted_original = lines[sort_indices]
-
     kept_segments = []
 
-    for i in range(sorted_scaled.shape[0]):
-        p1_canvas, p2_canvas = sorted_scaled[i]
+    for i in range(scaled_points.shape[0]):
+        p1_canvas, p2_canvas = scaled_points[i]
         line_pixels = bresenham_line(tuple(p1_canvas), tuple(p2_canvas))
 
         start_pixel = None
@@ -121,7 +115,6 @@ def simplify_lines(
     edges_resized = cv2.resize(edges_rgb, (orig_width, orig_height), interpolation=cv2.INTER_NEAREST)
 
     return np.array(kept_segments), edges_resized
-
 
 ################################################################
 # Rotate the lines in the associated coordinate space.
