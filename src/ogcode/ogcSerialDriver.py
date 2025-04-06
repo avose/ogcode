@@ -14,6 +14,8 @@ from time import sleep
 from threading import Thread, Lock
 from datetime import datetime
 
+from .ogcLog import ogcLog
+
 ################################################################################################
 
 class ogcSerialWriter(Thread):
@@ -273,6 +275,7 @@ class ogcSerialDriver:
         # Generate a timestamp string from current date and time.
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.messages.append(f"[{timestamp}] - {msg}")
+        ogcLog.add(msg)
         return
 
     def clear_messages(self):
@@ -286,6 +289,7 @@ class ogcSerialDriver:
         msg = f"[{timestamp}] - {err}"
         self.errors.append(msg)
         self.messages.append(msg)
+        ogcLog.add(err)
         return
 
     def clear_errors(self):
