@@ -30,7 +30,8 @@ class ogcEditorsPanel(wx.Window):
         # Create top-level sizer.
         box_main = wx.BoxSizer(wx.VERTICAL)
         # Create toolbar.
-        self.toolbar = wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
+        self.toolbar = wx.ToolBar(self, wx.ID_ANY, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
+        self.toolbar.SetMinSize((32, 32))
         tools = [
             (self.ID_CLOSE, "Close Tab", 'cross', self.OnToolTabClose),
             (self.ID_NEW, "New Tab", 'page_add', self.OnToolTabNew),

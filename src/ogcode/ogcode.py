@@ -24,12 +24,13 @@ from . import ogcGCode
 
 ################################################################################################
 class ogcFrame(wx.Frame):
-    ID_OPEN_FILE = 1000
-    ID_LICENSE   = 1002
-    ID_ABOUT     = 1003
-    ID_SETTINGS  = 1004
-    ID_ENGRAVE   = 1005
-    ID_EXIT      = 1006
+    ID_OPEN_FILE = wx.NewIdRef()
+    ID_SAVE_FILE = wx.NewIdRef()
+    ID_LICENSE   = wx.NewIdRef()
+    ID_ABOUT     = wx.NewIdRef()
+    ID_SETTINGS  = wx.NewIdRef()
+    ID_ENGRAVE   = wx.NewIdRef()
+    ID_EXIT      = wx.NewIdRef()
 
     ################################################################
     def __init__(self, app):
@@ -50,6 +51,9 @@ class ogcFrame(wx.Frame):
         menu_file = wx.Menu()
         item = wx.MenuItem(menu_file, self.ID_OPEN_FILE, text="Open File")
         item.SetBitmap(ogcIcons.Get('page_add'))
+        menu_file.Append(item)
+        item = wx.MenuItem(menu_file, self.ID_SAVE_FILE, text="Save File")
+        item.SetBitmap(ogcIcons.Get('disk'))
         menu_file.Append(item)
         item = wx.MenuItem(menu_file, self.ID_EXIT, text="Quit")
         item.SetBitmap(ogcIcons.Get('cross'))
@@ -185,6 +189,13 @@ class ogcFrame(wx.Frame):
             data, file_path = self.OpenFileDialog()
             if data is not None and file_path is not None:
                 self.editor.NewTab(data, file_path)
+            return
+        elif menu_id == self.ID_SAVE_FILE:
+            # Open a new file.
+            tab = self.editor.CurrentTab()
+            gcode = self.editor.CurrentTab().GetGCode()
+            if gcode is not None:
+                self.SaveFileDialog(gcode)
             return
         elif menu_id == self.ID_SETTINGS:
             # Open settings dialog.
