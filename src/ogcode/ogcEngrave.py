@@ -136,7 +136,7 @@ class ogcEngravePanel(wx.Panel):
     def OnSerialTimer(self, event):
         # Update engrave and stop button enabled states.
         if not self.serial or self.serial.finished:
-            if self.serial.finished and not self.finished:
+            if self.serial and self.serial.finished and not self.finished:
                 self.finished = True
                 ogcLog.add(f"Engrave Finished.")
             self.btn_engrave.Enable()

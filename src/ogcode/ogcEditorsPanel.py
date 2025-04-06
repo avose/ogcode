@@ -17,6 +17,63 @@ from .ogcEditorsNotebook import ogcEditorsNotebook
 
 ################################################################################################
 
+################################################################
+# Custom toolbar is used, as the default GTK toolbar creates
+# spurious warning prints to the console about negative sizes.
+class ogcToolbar(wx.Panel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        # Horizontal layout for toolbar buttons.
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        # Define toolbar buttons as tuples or None for a separator:
+        # (ID, Tooltip, Icon name, Event handler).
+        tools = [
+            (parent.ID_CLOSE, "Close Tab", 'cross', parent.OnToolTabClose),
+            (parent.ID_NEW, "New Tab", 'page_add', parent.OnToolTabNew),
+            (parent.ID_SAVE, "Save G-Code", 'disk', parent.OnToolSave),
+            None,
+            (EditorTool.ROT_ACLOCK, "Rotate Anti-Clockwise", 'rotate_anticlockwise', parent.OnToolRotAClk),
+            (EditorTool.ROT_CLOCK, "Rotate Clockwise", 'rotate_clockwise', parent.OnToolRotClk),
+            (EditorTool.FLIP_H, "Flip Horizontal", 'flip_horizontal', parent.OnToolFlipH),
+            (EditorTool.FLIP_V, "Flip Vertical", 'flip_vertical', parent.OnToolFlipV),
+            None,
+            (EditorTool.ZOOM_IN, "Zoom In", 'zoom_in', parent.OnToolZoomIn),
+            (EditorTool.ZOOM_DEF, "Zoom Default", 'zoom', parent.OnToolZoomDef),
+            (EditorTool.ZOOM_OUT, "Zoom Out", 'zoom_out', parent.OnToolZoomOut),
+            None,
+            (parent.ID_ENGRAVE, "Engrave", 'page_go', parent.OnToolEngrave),
+        ]
+        # Create and add buttons or separators to the sizer.
+        self.buttons = {}
+        for item in tools:
+            if item is None:
+                separator = wx.StaticLine(self, style=wx.LI_VERTICAL)
+                sizer.Add(separator, 0, wx.LEFT | wx.RIGHT | wx.EXPAND, 2)
+                continue
+            tid, label, icon, handler = item
+            bmp = ogcIcons.Get(icon)
+            btn = wx.BitmapButton(self, id=tid, bitmap=bmp, name=label, style=wx.BORDER_NONE)
+            btn.SetToolTip(label)
+            btn.Bind(wx.EVT_BUTTON, handler)
+            sizer.Add(btn, 0, wx.ALL, 1)
+            self.buttons[tid] = btn
+        # Finalize layout.
+        self.SetSizerAndFit(sizer)
+        # Bind paint event for custom background.
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        return
+
+    def OnPaint(self, event):
+        # Create vertical gradient from light gray to darker gray.
+        dc = wx.PaintDC(self)
+        width, height = self.GetClientSize()
+        top_color = wx.Colour(240, 240, 240)
+        bottom_color = wx.Colour(200, 200, 200)
+        dc.GradientFillLinear(wx.Rect(0, 0, width, height), top_color, bottom_color, wx.SOUTH)
+        event.Skip()
+        return
+
+################################################################
 class ogcEditorsPanel(wx.Window):
     ID_CLOSE   = wx.NewIdRef()
     ID_NEW     = wx.NewIdRef()
@@ -29,28 +86,8 @@ class ogcEditorsPanel(wx.Window):
         super(ogcEditorsPanel, self).__init__(parent,style=style)
         # Create top-level sizer.
         box_main = wx.BoxSizer(wx.VERTICAL)
-        # Create toolbar.
-        self.toolbar = wx.ToolBar(self, wx.ID_ANY, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
-        self.toolbar.SetMinSize((32, 32))
-        tools = [
-            (self.ID_CLOSE, "Close Tab", 'cross', self.OnToolTabClose),
-            (self.ID_NEW, "New Tab", 'page_add', self.OnToolTabNew),
-            (self.ID_SAVE, "Save G-Code", 'disk', self.OnToolSave),
-            (EditorTool.ROT_ACLOCK, "Rotate Anti-Clockwise", 'rotate_anticlockwise', self.OnToolRotAClk),
-            (EditorTool.ROT_CLOCK, "Rotate Clockwise", 'rotate_clockwise', self.OnToolRotClk),
-            (EditorTool.FLIP_H, "Flip Horizontal", 'flip_horizontal', self.OnToolFlipH),
-            (EditorTool.FLIP_V, "Flip Verical", 'flip_vertical', self.OnToolFlipV),
-            (EditorTool.ZOOM_IN, "Zoom In", 'zoom_in', self.OnToolZoomIn),
-            (EditorTool.ZOOM_DEF, "Zoom Default", 'zoom', self.OnToolZoomDef),
-            (EditorTool.ZOOM_OUT, "Zoom Out", 'zoom_out', self.OnToolZoomOut),
-            (self.ID_ENGRAVE, "Engrave", 'page_go', self.OnToolEngrave),
-        ]
-        for tool in tools:
-            tid, text, icon, callback = tool
-            self.toolbar.AddTool(tid, text, ogcIcons.Get(icon), wx.NullBitmap,
-                                 wx.ITEM_NORMAL, text, text, None)
-            self.Bind(wx.EVT_TOOL, callback, id=tid)
-        self.toolbar.Realize()
+        # Create custom toolbar using buttons.
+        self.toolbar = ogcToolbar(self)
         box_main.Add(self.toolbar, 0, wx.EXPAND)
         # Add editors notebook.
         self.notebook = ogcEditorsNotebook(self)
