@@ -406,35 +406,50 @@ class ogcEditorController(wx.Panel):
         content.SetMinSize((64, 64))
         box_content = wx.BoxSizer(wx.VERTICAL)
 
-        # IR size dropdown.
-        ir_size_label = wx.StaticText(content, label="IR Size:")
-        self.ir_size_choices = ["Small (512)", "Medium (1024)", "Large (2048)"]
-        self.ir_size_values = {"Small (512)": 512, "Medium (1024)": 1024, "Large (2048)": 2048}
-        self.ir_size_ctrl = wx.Choice(content, choices=self.ir_size_choices)
-        self.ir_size_ctrl.SetSelection(1)
+        if self.mode == ViewerMode.IMAGE:
+            # IR size dropdown.
+            ir_size_label = wx.StaticText(content, label="IR Size:")
+            self.ir_size_choices = ["Small (512)", "Medium (1024)", "Large (2048)"]
+            self.ir_size_values = {"Small (512)": 512, "Medium (1024)": 1024, "Large (2048)": 2048}
+            self.ir_size_ctrl = wx.Choice(content, choices=self.ir_size_choices)
+            self.ir_size_ctrl.SetSelection(1)
 
-        # Threshold sliders.
-        threshold_min_label = wx.StaticText(content, label="Threshold Min:")
-        self.threshold_min_slider = wx.Slider(content, minValue=0, maxValue=255, style=wx.SL_HORIZONTAL)
-        self.threshold_min_slider.SetValue(100)
-        self.threshold_min_value = wx.StaticText(content, label="100")
-        self.threshold_min_value.SetMinSize((30, 1))
+            # Threshold sliders.
+            threshold_min_label = wx.StaticText(content, label="Threshold Min:")
+            self.threshold_min_slider = wx.Slider(content, minValue=0, maxValue=255, style=wx.SL_HORIZONTAL)
+            self.threshold_min_slider.SetValue(100)
+            self.threshold_min_value = wx.StaticText(content, label="100")
+            self.threshold_min_value.SetMinSize((30, 1))
 
-        threshold_max_label = wx.StaticText(content, label="Threshold Max:")
-        self.threshold_max_slider = wx.Slider(content, minValue=0, maxValue=255, style=wx.SL_HORIZONTAL)
-        self.threshold_max_slider.SetValue(200)
-        self.threshold_max_value = wx.StaticText(content, label="200")
-        self.threshold_max_value.SetMinSize((30, 1))
+            threshold_max_label = wx.StaticText(content, label="Threshold Max:")
+            self.threshold_max_slider = wx.Slider(content, minValue=0, maxValue=255, style=wx.SL_HORIZONTAL)
+            self.threshold_max_slider.SetValue(200)
+            self.threshold_max_value = wx.StaticText(content, label="200")
+            self.threshold_max_value.SetMinSize((30, 1))
 
-        box_min_slider = wx.BoxSizer(wx.HORIZONTAL)
-        box_min_slider.Add(self.threshold_min_slider, 1, wx.EXPAND | wx.RIGHT, 1)
-        box_min_slider.Add(self.threshold_min_value, 0, wx.ALIGN_CENTER_VERTICAL)
+            box_min_slider = wx.BoxSizer(wx.HORIZONTAL)
+            box_min_slider.Add(self.threshold_min_slider, 1, wx.EXPAND | wx.RIGHT, 1)
+            box_min_slider.Add(self.threshold_min_value, 0, wx.ALIGN_CENTER_VERTICAL)
 
-        box_max_slider = wx.BoxSizer(wx.HORIZONTAL)
-        box_max_slider.Add(self.threshold_max_slider, 1, wx.EXPAND | wx.RIGHT, 1)
-        box_max_slider.Add(self.threshold_max_value, 0, wx.ALIGN_CENTER_VERTICAL)
+            box_max_slider = wx.BoxSizer(wx.HORIZONTAL)
+            box_max_slider.Add(self.threshold_max_slider, 1, wx.EXPAND | wx.RIGHT, 1)
+            box_max_slider.Add(self.threshold_max_value, 0, wx.ALIGN_CENTER_VERTICAL)
 
-        # Laser power slider.
+            # Checkboxes.
+            self.show_image_checkbox = wx.CheckBox(content, label="Show Image")
+            self.show_lines_checkbox = wx.CheckBox(content, label="Show Lines")
+            self.show_image_checkbox.SetValue(True)
+            self.show_lines_checkbox.SetValue(True)
+
+            # Layout order for image mode.
+            box_content.Add(ir_size_label, 0, wx.LEFT | wx.TOP, 2)
+            box_content.Add(self.ir_size_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 2)
+            box_content.Add(threshold_min_label, 0, wx.LEFT | wx.TOP, 2)
+            box_content.Add(box_min_slider, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 2)
+            box_content.Add(threshold_max_label, 0, wx.LEFT | wx.TOP, 0)
+            box_content.Add(box_max_slider, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 2)
+
+        # Laser power slider (shared by both modes).
         laser_power_label = wx.StaticText(content, label="Laser Power:")
         self.laser_power_slider = wx.Slider(content, minValue=0, maxValue=255, style=wx.SL_HORIZONTAL)
         self.laser_power_slider.SetValue(16)
@@ -445,35 +460,26 @@ class ogcEditorController(wx.Panel):
         box_laser_slider.Add(self.laser_power_slider, 1, wx.EXPAND | wx.RIGHT, 1)
         box_laser_slider.Add(self.laser_power_value, 0, wx.ALIGN_CENTER_VERTICAL)
 
-        # Checkboxes.
-        self.show_image_checkbox = wx.CheckBox(content, label="Show Image")
-        self.show_lines_checkbox = wx.CheckBox(content, label="Show Lines")
-        self.show_image_checkbox.SetValue(True)
-        self.show_lines_checkbox.SetValue(True)
-
-        # Layout order.
-        box_content.Add(ir_size_label, 0, wx.LEFT | wx.TOP, 2)
-        box_content.Add(self.ir_size_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 2)
-        box_content.Add(threshold_min_label, 0, wx.LEFT | wx.TOP, 2)
-        box_content.Add(box_min_slider, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 2)
-        box_content.Add(threshold_max_label, 0, wx.LEFT | wx.TOP, 0)
-        box_content.Add(box_max_slider, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 2)
         box_content.Add(laser_power_label, 0, wx.LEFT | wx.TOP, 2)
         box_content.Add(box_laser_slider, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 1)
-        box_content.Add(self.show_image_checkbox, 0, wx.LEFT | wx.TOP, 2)
-        box_content.Add(self.show_lines_checkbox, 0, wx.LEFT | wx.TOP | wx.BOTTOM, 2)
+
+        if self.mode == ViewerMode.IMAGE:
+            box_content.Add(self.show_image_checkbox, 0, wx.LEFT | wx.TOP, 2)
+            box_content.Add(self.show_lines_checkbox, 0, wx.LEFT | wx.TOP | wx.BOTTOM, 2)
 
         content.SetSizerAndFit(box_content)
         box_main.Add(content, 1, wx.EXPAND)
         self.SetSizerAndFit(box_main)
 
         # Bind events.
-        self.ir_size_ctrl.Bind(wx.EVT_CHOICE, self.OnIRSize)
-        self.threshold_min_slider.Bind(wx.EVT_SLIDER, self.OnThreshold)
-        self.threshold_max_slider.Bind(wx.EVT_SLIDER, self.OnThreshold)
+        if self.mode == ViewerMode.IMAGE:
+            self.ir_size_ctrl.Bind(wx.EVT_CHOICE, self.OnIRSize)
+            self.threshold_min_slider.Bind(wx.EVT_SLIDER, self.OnThreshold)
+            self.threshold_max_slider.Bind(wx.EVT_SLIDER, self.OnThreshold)
+            self.show_image_checkbox.Bind(wx.EVT_CHECKBOX, self.OnShowImage)
+            self.show_lines_checkbox.Bind(wx.EVT_CHECKBOX, self.OnShowLines)
+
         self.laser_power_slider.Bind(wx.EVT_SLIDER, self.OnLaserPower)
-        self.show_image_checkbox.Bind(wx.EVT_CHECKBOX, self.OnShowImage)
-        self.show_lines_checkbox.Bind(wx.EVT_CHECKBOX, self.OnShowLines)
 
         self.Show(True)
         return
