@@ -70,6 +70,10 @@ class ogcToolbar(wx.Panel):
         top_color = wx.Colour(240, 240, 240)
         bottom_color = wx.Colour(200, 200, 200)
         dc.GradientFillLinear(wx.Rect(0, 0, width, height), top_color, bottom_color, wx.SOUTH)
+        # Draw 1px black border on the bottom.
+        dc.SetPen(wx.Pen(wx.Colour(0, 0, 0), width=1))
+        dc.SetBrush(wx.TRANSPARENT_BRUSH)
+        dc.DrawLine(0, height-1, width, height-1)
         event.Skip()
         return
 

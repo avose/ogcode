@@ -42,7 +42,7 @@ class EditorTool():
 class ogcEditorViewer(wx.Panel):
     def __init__(self, parent, data, path, mode):
         # Initialize panel.
-        style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
+        style = wx.BORDER_NONE | wx.WANTS_CHARS
         super().__init__(parent, style=style)
         self.min_size = (640, 480)
         self.SetMinSize(self.min_size)
@@ -561,7 +561,7 @@ class ogcEditorPanel(wx.Panel):
 
     def __init__(self, parent, data, path, mode):
         # Initialize the panel with border and character input support.
-        style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
+        style = wx.BORDER_NONE | wx.WANTS_CHARS
         super(ogcEditorPanel, self).__init__(parent, style=style)
         self.SetMinSize((640, 480))
         self.SetBackgroundColour((0, 0, 0))

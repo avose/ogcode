@@ -23,7 +23,7 @@ class ogcEditorsNotebook(wx.Window):
     ICON_GCODE     = 2
 
     def __init__(self, parent):
-        style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
+        style = wx.BORDER_NONE | wx.WANTS_CHARS
         super(ogcEditorsNotebook, self).__init__(parent, style=style)
         self.min_size = [640, 480]
         self.SetMinSize(self.min_size)
