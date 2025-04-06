@@ -96,6 +96,7 @@ class ogcEngravePanel(wx.Panel):
             self.ports[port_string] = (port, desc, hwid)
         self.cb_ports.SetItems(self.port_strings)
         # Default to first serial port.
+        self.finished = True
         self.cb_ports.SetSelection(0)
         self.serial = None
         if len(ports_list) > 0:
@@ -135,6 +136,9 @@ class ogcEngravePanel(wx.Panel):
     def OnSerialTimer(self, event):
         # Update engrave and stop button enabled states.
         if not self.serial or self.serial.finished:
+            if self.serial.finished and not self.finished:
+                self.finished = True
+                ogcLog.add(f"Engrave Finished.")
             self.btn_engrave.Enable()
             self.btn_stop.Disable()
         # Update progress bar.
@@ -159,7 +163,8 @@ class ogcEngravePanel(wx.Panel):
         self.serial.write(str(self.gcode))
         if self.serial.errors:
             self.UpdateMessages()
-        ogcLog.add(f"Engrave Start.")
+        ogcLog.add(f"Engrave Start, size = {len(str(self.gcode))}")
+        self.finished = False
         return
 
     def OnStop(self, event):
