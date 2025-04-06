@@ -9,6 +9,7 @@ This file holds the code for engraveing G-code to a microcontroller over a seria
 
 import wx
 
+from .ogcLog import ogcLog
 from .ogcIcons import ogcIcons
 from .ogcSerialDriver import ogcSerialDriver
 
@@ -158,12 +159,14 @@ class ogcEngravePanel(wx.Panel):
         self.serial.write(str(self.gcode))
         if self.serial.errors:
             self.UpdateMessages()
+        ogcLog.add(f"Engrave Start.")
         return
 
     def OnStop(self, event):
         # Stop engraving.
         if self.serial:
             self.serial.stop()
+        ogcLog.add(f"Engrave Stop.")
         return
 
     def OnClose(self, event=None):

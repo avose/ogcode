@@ -12,6 +12,7 @@ import sys
 import wx
 
 from .ogcApp import ogcApp
+from .ogcLog import ogcLog
 from .ogcHelp import ogcAboutFrame, ogcLicenseFrame
 from .ogcIcons import ogcIcons
 from .ogcVersion import ogcVersion
@@ -119,12 +120,14 @@ class ogcFrame(wx.Frame):
             if wx.Image.CanRead(file_path):
                 # Open as image.
                 image = wx.Image(file_path, wx.BITMAP_TYPE_ANY)
+                ogcLog.add(f"Opened Image from: '{file_path}'")
                 return (image, file_path)
             else:
                 # Open as G-Code.
                 try:
                     with open(file_path, "r") as gfile:
                         gcode = ogcGCode.gcScript(text=gfile.read())
+                    ogcLog.add(f"Opened G-Code from: '{file_path}'")
                     return (gcode, file_path)
                 except Exception as excptn:
                     with wx.MessageDialog(self, "Failed to open G-code file:\n" +
@@ -153,6 +156,7 @@ class ogcFrame(wx.Frame):
             with open(file_path, "w", encoding="utf-8") as gcode_file:
                 gcode_file.write(gcode)
                 gcode_file.write("\n")
+            ogcLog.add(f"Wrote G-Code to: '{file_path}'")
         return
 
     ################################################################
