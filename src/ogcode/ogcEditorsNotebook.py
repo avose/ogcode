@@ -34,6 +34,7 @@ class ogcEditorsNotebook(wx.Window):
         self.image_list.Add(ogcIcons.Get('picture'))
         self.image_list.Add(ogcIcons.Get('chart_line'))
         self.notebook = wx.Notebook(self)
+        self.notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.OnTabChanged)
         self.notebook.SetMinSize(self.min_size)
         self.notebook.SetImageList(self.image_list)
         self.tabs = []
@@ -41,6 +42,13 @@ class ogcEditorsNotebook(wx.Window):
         box_main.Add(self.notebook, 1, wx.EXPAND)
         self.SetSizerAndFit(box_main)
         self.Show(True)
+        return
+
+    def OnTabChanged(self, event):
+        # Mark the tab as dirty to force a full redraw.
+        tab = self.CurrentTab()
+        if not isinstance(tab, ogcPlaceHolder):
+            tab.MarkDirty()
         return
 
     def NewTab(self, data, path):

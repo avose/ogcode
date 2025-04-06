@@ -285,6 +285,16 @@ class ogcEditorViewer(wx.Panel):
             mem_dc.SetPen(wx.Pen((255, 0, 0)))
             mem_dc.DrawPointList(scaled_lines.reshape(-1, 2).tolist())
 
+        # Draw bounding box for IR size in purple.
+        bounding_box = np.array([
+            [0, 0], [self.ir_size, 0],
+            [self.ir_size, self.ir_size], [0, self.ir_size],
+            [0, 0]
+        ])
+        scaled_box = np.round(bounding_box * scale + offset).astype(int)
+        mem_dc.SetPen(wx.Pen((128, 0, 128)))
+        mem_dc.DrawLines(scaled_box.tolist())
+
         # Draw the updated cached bitmap.
         mem_dc.SelectObject(wx.NullBitmap)
         dc.DrawBitmap(self.canvas_bitmap, 0, 0, True)
@@ -627,6 +637,11 @@ class ogcEditorPanel(wx.Panel):
     def ToolCommand(self, command):
         # Pass along a command from toolbar.
         self.viewer.ToolCommand(command)
+        return
+
+    def MarkDirty(self):
+        # Mark viewer as dirty to force full redraw.
+        self.viewer.dirty = True
         return
 
 ################################################################################################
