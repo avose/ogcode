@@ -50,7 +50,8 @@ class ogcEditorViewer(wx.Panel):
         # Initialize panel.
         style = wx.SIMPLE_BORDER | wx.WANTS_CHARS
         super().__init__(parent, style=style)
-        self.SetMinSize((640, 480))
+        self.min_size = (640, 480)
+        self.SetMinSize(self.min_size)
         # Initialize data depending on mode.
         self.mode = mode
         self.data = data
@@ -70,6 +71,8 @@ class ogcEditorViewer(wx.Panel):
             self.gcode = self.data
             self.laser_power = self.gcode.get_laser_power()
             self.lines = self.gcode.to_lines(self.ir_size)
+            min_dim = min(self.min_size)
+            self.lines_scale = np.array([min_dim / self.ir_size, min_dim / self.ir_size])
 
         # Rendering and view state.
         self.bitmap = None
@@ -182,14 +185,6 @@ class ogcEditorViewer(wx.Panel):
         dims = (self.Size[0], None) if self.Size[0] < self.Size[1] else (None, self.Size[1])
         self.image.Resize(*dims)
         self.bitmap = wx.Bitmap(self.image.WXImage())
-        # Center image only if requested.
-        if self.recenter_on_next_render:
-            self.zoom = 1.0
-            self.offset = np.array([
-                (self.Size[0] - self.bitmap.GetWidth()) // 2,
-                (self.Size[1] - self.bitmap.GetHeight()) // 2
-            ], dtype=float)
-            self.recenter_on_next_render = False
         return
 
     def OnIRSize(self, event):
@@ -264,8 +259,7 @@ class ogcEditorViewer(wx.Panel):
                               self.image.height / self.ir_size]) * self.zoom
         elif self.mode == ViewerMode.GCODE:
             # Compute scaling for lines / points.
-            scale = np.array([self.Size[0] / self.ir_size,
-                              self.Size[1] / self.ir_size]) * self.zoom
+            scale = self.lines_scale * self.zoom
 
         # This correction is here to deal with some difference between the
         # GC scaling vs the manual scaling with the points / lines and the DC.
@@ -302,8 +296,28 @@ class ogcEditorViewer(wx.Panel):
         if self.dirty:
             if self.mode == ViewerMode.IMAGE:
                 self.ProcessImage()
+                # Center image if requested.
+                if self.recenter_on_next_render:
+                    self.zoom = 1.0
+                    self.offset = np.array([
+                        (self.Size[0] - self.bitmap.GetWidth()) / 2,
+                        (self.Size[1] - self.bitmap.GetHeight()) / 2
+                    ])
+            elif self.mode == ViewerMode.GCODE:
+                # Center G-Code if requested.
+                if self.recenter_on_next_render:
+                    self.zoom = 1.0
+                    min_dim = min(self.Size)
+                    self.lines_scale = np.array([
+                        min_dim / self.ir_size * 0.925, min_dim / self.ir_size * 0.925
+                    ])
+                    self.offset = np.array([
+                        (self.Size[0] - self.ir_size * self.lines_scale[0]) / 2,
+                        (self.Size[1] - self.ir_size * self.lines_scale[0]) / 2
+                    ])
             self.Refresh()
             self.Update()
+            self.recenter_on_next_render = False
             self.dirty = False
         return
 

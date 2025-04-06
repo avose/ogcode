@@ -286,7 +286,7 @@ class gcScript():
         new_min = lines.reshape(-1, 2).min(axis=0)
         new_max = lines.reshape(-1, 2).max(axis=0)
         self.bounds = (tuple(new_min), tuple(new_max))
-        return lines
+        return lines.reshape(-1, 2)
 
     ################################################################
     def get_laser_power(self, default: int = 16) -> int:
