@@ -287,12 +287,12 @@ class ogcEditorViewer(wx.Panel):
 
         # Draw bounding box for IR size in purple.
         bounding_box = np.array([
-            [0, 0], [self.ir_size, 0],
-            [self.ir_size, self.ir_size], [0, self.ir_size],
-            [0, 0]
+            [-1, -1], [self.ir_size, -1],
+            [self.ir_size+1, self.ir_size+1], [-1, self.ir_size+1],
+            [-1, -1]
         ])
         scaled_box = np.round(bounding_box * scale + offset).astype(int)
-        mem_dc.SetPen(wx.Pen((128, 0, 128)))
+        mem_dc.SetPen(wx.Pen((64, 0, 128)))
         mem_dc.DrawLines(scaled_box.tolist())
 
         # Draw the updated cached bitmap.
