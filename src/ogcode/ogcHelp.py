@@ -882,36 +882,52 @@ class ogcDonateFrame(wx.Frame):
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        # Load and show the PNG image
+        # Load and show the PNG image.
         script_dir = os.path.dirname(os.path.abspath(__file__))
         script_pp_dir = Path(script_dir).parent.parent.absolute()
-        img_dir = os.path.join(script_pp_dir,"images")
+        img_dir = os.path.join(script_pp_dir, "images")
         image_path = os.path.join(img_dir, "btc_addr.png")
         bitmap = wx.Bitmap(image_path, wx.BITMAP_TYPE_PNG)
         qr_image = wx.StaticBitmap(panel, bitmap=bitmap)
         vbox.Add(qr_image, 0, wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, 15)
 
-        # Add label and address
+        # Add label and address.
+        btc_addr = "1DW8hyB4LgXu4kSdwJ8dYedGNvv49Pudsr"
         btc_label = wx.StaticText(panel, label="Bitcoin Address:")
-        address = wx.StaticText(panel, label="1DW8hyB4LgXu4kSdwJ8dYedGNvv49Pudsr")
-        font = address.GetFont()
-        font.SetPointSize(10)
-        address.SetFont(font)
-        vbox.Add(btc_label, 0, wx.ALIGN_CENTER | wx.BOTTOM, 2)
-        vbox.Add(address, 0, wx.ALIGN_CENTER | wx.BOTTOM, 20)
+        addr_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        addr_style = wx.TE_READONLY | wx.TE_CENTER | wx.BORDER_NONE
+        addr_text = wx.TextCtrl(panel, value=btc_addr, style=addr_style)
+        font = addr_text.GetFont()
+        font.SetPointSize(9)
+        addr_text.SetFont(font)
+        copy_icon = ogcIcons.Get('page_white_copy')
+        copy_btn = wx.BitmapButton(panel, bitmap=copy_icon, style=wx.BORDER_NONE)
+        copy_btn.Bind(wx.EVT_BUTTON, lambda evt: self.CopyToClipboard(btc_addr))
+        addr_sizer.Add(addr_text, 1, wx.EXPAND | wx.RIGHT, 5)
+        addr_sizer.Add(copy_btn, 0, wx.ALIGN_CENTER_VERTICAL)
 
-        # Add OK button to close
+        vbox.Add(btc_label, 0, wx.ALIGN_CENTER | wx.BOTTOM, 2)
+        vbox.Add(addr_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+        # Add OK button to close.
         ok_btn = wx.Button(panel, label="OK")
         ok_btn.Bind(wx.EVT_BUTTON, self.OnClose)
-        
         vbox.Add(ok_btn, 0, wx.ALIGN_CENTER | wx.BOTTOM, 2)
+
         panel.SetSizer(vbox)
         panel.Layout()
         self.SetSize((300, 340))
         self.Centre()
         self.Show()
 
+    def CopyToClipboard(self, text):
+        # Copy BTC address to clipboard.
+        if wx.TheClipboard.Open():
+            wx.TheClipboard.SetData(wx.TextDataObject(text))
+            wx.TheClipboard.Close()
+
     def OnClose(self, event):
+        # Clear parent's donate_frame and close.
         self.Parent.donate_frame = None
         self.Close()
 
