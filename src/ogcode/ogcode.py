@@ -13,7 +13,7 @@ import wx
 
 from .ogcApp import ogcApp
 from .ogcLog import ogcLog
-from .ogcHelp import ogcAboutFrame, ogcLicenseFrame
+from .ogcHelp import ogcAboutFrame, ogcLicenseFrame, ogcDonateFrame
 from .ogcIcons import ogcIcons
 from .ogcVersion import ogcVersion
 from .ogcEngrave import ogcEngraveFrame
@@ -28,6 +28,7 @@ class ogcFrame(wx.Frame):
     ID_SAVE_FILE = wx.NewIdRef()
     ID_LICENSE   = wx.NewIdRef()
     ID_ABOUT     = wx.NewIdRef()
+    ID_DONATE    = wx.NewIdRef()
     ID_SETTINGS  = wx.NewIdRef()
     ID_ENGRAVE   = wx.NewIdRef()
     ID_EXIT      = wx.NewIdRef()
@@ -39,7 +40,7 @@ class ogcFrame(wx.Frame):
                           size = (1366, 768))
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.icon = wx.Icon()
-        self.icon.CopyFromBitmap(ogcIcons.Get('page_edit'))
+        self.icon.CopyFromBitmap(ogcIcons.Get('chart_line'))
         self.SetIcon(self.icon)
         self.InitUI()
         return
@@ -79,6 +80,9 @@ class ogcFrame(wx.Frame):
         item = wx.MenuItem(menu_help, self.ID_LICENSE, text="License")
         item.SetBitmap(ogcIcons.Get('script_key'))
         menu_help.Append(item)
+        item = wx.MenuItem(menu_help, self.ID_DONATE, text="Donate")
+        item.SetBitmap(ogcIcons.Get('money_dollar'))
+        menu_help.Append(item)
         menubar.Append(menu_help, '&Help')
         # Connect menus to menu bar.
         self.SetMenuBar(menubar)
@@ -87,6 +91,7 @@ class ogcFrame(wx.Frame):
         self.settings_frame = None
         self.about_frame = None
         self.license_frame = None
+        self.donate_frame = None
         return
 
     ################################################################
@@ -225,6 +230,13 @@ class ogcFrame(wx.Frame):
                 self.license_frame = ogcLicenseFrame(self)
             else:
                 self.license_frame.Raise()
+            return
+        elif menu_id == self.ID_DONATE:
+            # Open donation dialog.
+            if self.donate_frame is None:
+                self.donate_frame = ogcDonateFrame(self)
+            else:
+                self.donate_frame.Raise()
             return
         return
 

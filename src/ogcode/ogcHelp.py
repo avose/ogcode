@@ -8,6 +8,8 @@ This file holds the code for windows created by the Help menu: About and License
 ################################################################################################
 
 import wx
+import os
+from pathlib import Path
 
 from .ogcVersion import ogcVersion
 from .ogcIcons import ogcIcons
@@ -867,5 +869,49 @@ class ogcLicenseFrame(wx.Frame):
         self.Parent.license_frame = None
         self.Destroy()
         return
+
+################################################################################################
+class ogcDonateFrame(wx.Frame):
+
+    def __init__(self, parent=None):
+        style = wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX)
+        super().__init__(parent, title="Support OG-Code", style=style)
+        self.icon = wx.Icon()
+        self.icon.CopyFromBitmap(ogcIcons.Get('money_dollar'))
+        self.SetIcon(self.icon)
+        panel = wx.Panel(self)
+        vbox = wx.BoxSizer(wx.VERTICAL)
+
+        # Load and show the PNG image
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        script_pp_dir = Path(script_dir).parent.parent.absolute()
+        img_dir = os.path.join(script_pp_dir,"images")
+        image_path = os.path.join(img_dir, "btc_addr.png")
+        bitmap = wx.Bitmap(image_path, wx.BITMAP_TYPE_PNG)
+        qr_image = wx.StaticBitmap(panel, bitmap=bitmap)
+        vbox.Add(qr_image, 0, wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, 15)
+
+        # Add label and address
+        btc_label = wx.StaticText(panel, label="Bitcoin Address:")
+        address = wx.StaticText(panel, label="1DW8hyB4LgXu4kSdwJ8dYedGNvv49Pudsr")
+        font = address.GetFont()
+        font.SetPointSize(10)
+        address.SetFont(font)
+        vbox.Add(btc_label, 0, wx.ALIGN_CENTER | wx.BOTTOM, 2)
+        vbox.Add(address, 0, wx.ALIGN_CENTER | wx.BOTTOM, 20)
+
+        # Add OK button to close
+        ok_btn = wx.Button(panel, label="OK")
+        ok_btn.Bind(wx.EVT_BUTTON, self.OnClose)
+        
+        vbox.Add(ok_btn, 0, wx.ALIGN_CENTER | wx.BOTTOM, 2)
+        panel.SetSizer(vbox)
+        panel.Layout()
+        self.SetSize((300, 340))
+        self.Centre()
+        self.Show()
+
+    def OnClose(self, event):
+        self.Close()
 
 ################################################################################################
