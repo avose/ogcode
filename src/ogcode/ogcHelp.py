@@ -912,6 +912,7 @@ class ogcDonateFrame(wx.Frame):
         self.Show()
 
     def OnClose(self, event):
+        self.Parent.donate_frame = None
         self.Close()
 
 ################################################################################################
